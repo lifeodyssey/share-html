@@ -3,6 +3,14 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
+  "homepage": "https://sharehtml.zhenjia.org",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/lifeodyssey/share-html.git"
+  },
+  "bugs": {
+    "url": "https://github.com/lifeodyssey/share-html/issues"
+  },
   "scripts": {
     "dev": "vite build --mode development && wrangler dev",
     "dev:client": "vite --host 127.0.0.1",
