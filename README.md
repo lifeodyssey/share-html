@@ -2,6 +2,8 @@
 
 Upload a single HTML file, get an unlisted share link, and let others view it in a sandboxed preview.
 
+Live app: https://sharehtml.zhenjia.org
+
 ## Stack
 
 - Cloudflare Workers Static Assets for the app shell and API.
@@ -33,6 +35,8 @@ npx wrangler r2 bucket create share-html-prod
 ```
 
 Apply the Supabase migration in `supabase/migrations/0001_share_html_schema.sql`.
+
+For production magic links, add `https://sharehtml.zhenjia.org` to the Supabase Auth site URL and redirect allow list.
 
 ## MVP Features
 

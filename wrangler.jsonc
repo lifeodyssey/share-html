@@ -4,6 +4,7 @@
   "main": "src/worker/index.ts",
   "compatibility_date": "2026-05-25",
   "compatibility_flags": ["nodejs_compat"],
+  "workers_dev": true,
   "observability": {
     "enabled": true,
     "head_sampling_rate": 1
@@ -14,6 +15,12 @@
     "not_found_handling": "single-page-application",
     "run_worker_first": ["/api/*", "/v/*"]
   },
+  "routes": [
+    {
+      "pattern": "sharehtml.zhenjia.org",
+      "custom_domain": true
+    }
+  ],
   "r2_buckets": [
     {
       "binding": "SHARE_HTML_BUCKET",
@@ -23,8 +30,8 @@
   "vars": {
     "SUPABASE_URL": "https://hihvtuyweqxnsmqmegdt.supabase.co",
     "SUPABASE_PUBLISHABLE_KEY": "sb_publishable_O2svPHByfqE4UPnQPMrPRA_eowyAuET",
-    "APP_ORIGIN": "",
-    "PREVIEW_ORIGIN": "",
+    "APP_ORIGIN": "https://sharehtml.zhenjia.org",
+    "PREVIEW_ORIGIN": "https://sharehtml.zhenjia.org",
     "MAX_ANON_HTML_BYTES": "1048576",
     "MAX_USER_HTML_BYTES": "5242880"
   }
