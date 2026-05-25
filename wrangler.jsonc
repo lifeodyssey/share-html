@@ -1,0 +1,31 @@
+{
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  "name": "share-html",
+  "main": "src/worker/index.ts",
+  "compatibility_date": "2026-05-25",
+  "compatibility_flags": ["nodejs_compat"],
+  "observability": {
+    "enabled": true,
+    "head_sampling_rate": 1
+  },
+  "assets": {
+    "directory": "./dist",
+    "binding": "ASSETS",
+    "not_found_handling": "single-page-application",
+    "run_worker_first": ["/api/*", "/v/*"]
+  },
+  "r2_buckets": [
+    {
+      "binding": "SHARE_HTML_BUCKET",
+      "bucket_name": "share-html-prod"
+    }
+  ],
+  "vars": {
+    "SUPABASE_URL": "https://hihvtuyweqxnsmqmegdt.supabase.co",
+    "SUPABASE_PUBLISHABLE_KEY": "sb_publishable_O2svPHByfqE4UPnQPMrPRA_eowyAuET",
+    "APP_ORIGIN": "",
+    "PREVIEW_ORIGIN": "",
+    "MAX_ANON_HTML_BYTES": "1048576",
+    "MAX_USER_HTML_BYTES": "5242880"
+  }
+}
