@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "homepage": "https://sharehtml.zhenjia.org",
+  "homepage": "https://sharehtml.zhenjia.dev",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/lifeodyssey/share-html.git"

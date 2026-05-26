@@ -13,11 +13,11 @@
     "directory": "./dist",
     "binding": "ASSETS",
     "not_found_handling": "single-page-application",
-    "run_worker_first": ["/api/*", "/v/*"]
+    "run_worker_first": true
   },
   "routes": [
     {
-      "pattern": "sharehtml.zhenjia.org",
+      "pattern": "sharehtml.zhenjia.dev",
       "custom_domain": true
     }
   ],
@@ -30,8 +30,8 @@
   "vars": {
     "SUPABASE_URL": "https://hihvtuyweqxnsmqmegdt.supabase.co",
     "SUPABASE_PUBLISHABLE_KEY": "sb_publishable_O2svPHByfqE4UPnQPMrPRA_eowyAuET",
-    "APP_ORIGIN": "https://sharehtml.zhenjia.org",
-    "PREVIEW_ORIGIN": "https://sharehtml.zhenjia.org",
+    "APP_ORIGIN": "https://sharehtml.zhenjia.dev",
+    "PREVIEW_ORIGIN": "https://sharehtml.zhenjia.dev",
     "MAX_ANON_HTML_BYTES": "1048576",
     "MAX_USER_HTML_BYTES": "5242880"
   }

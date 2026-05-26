@@ -37,12 +37,89 @@ const HTML_HEADERS = {
   "content-type": "text/html; charset=utf-8"
 };
 
+const SITE_ORIGIN = "https://sharehtml.zhenjia.dev";
+const SUPABASE_AUTH_ISSUER = "https://hihvtuyweqxnsmqmegdt.supabase.co/auth/v1";
+const DISCOVERY_LINKS = [
+  '</.well-known/api-catalog>; rel="api-catalog"; type="application/linkset+json"',
+  '</openapi.json>; rel="service-desc"; type="application/openapi+json"',
+  '</llms.txt>; rel="service-doc"; type="text/markdown"',
+  '</.well-known/oauth-protected-resource>; rel="oauth-protected-resource"; type="application/json"',
+  '</.well-known/agent-skills/index.json>; rel="service-doc"; type="application/json"',
+  '</.well-known/webmcp.json>; rel="service-desc"; type="application/json"'
+].join(", ");
+
+const LLMS_TXT = `# Share HTML
+
+Share HTML is a Cloudflare-hosted tool for uploading one self-contained HTML file and sharing it as a sandboxed live preview.
+
+## Site Identity
+
+- Canonical origin: ${SITE_ORIGIN}
+- GitHub repository: https://github.com/lifeodyssey/share-html
+- Primary use case: quick HTML prototypes, mockups, receipts, demos, and one-off pages that need a URL.
+
+## Important Routes
+
+- App home: ${SITE_ORIGIN}/
+- Create share API: POST ${SITE_ORIGIN}/api/shares
+- List signed-in user's shares: GET ${SITE_ORIGIN}/api/shares
+- Public share API: GET ${SITE_ORIGIN}/api/public/shares/{slug}
+- Public share page: ${SITE_ORIGIN}/s/{slug}
+- Sandboxed preview: ${SITE_ORIGIN}/v/{slug}/
+- API catalog: ${SITE_ORIGIN}/.well-known/api-catalog
+- OpenAPI description: ${SITE_ORIGIN}/openapi.json
+
+## Safety Model
+
+- Uploaded HTML is not sanitized. It is isolated in a sandboxed preview route.
+- Anonymous uploads expire after 7 days.
+- Signed-in users can keep and delete shares.
+- A lightweight scanner can mark uploads clean, suspicious, needs review, or blocked.
+- Private R2 objects are only read by this Worker.
+
+## Agent Use
+
+- Use the share page at /s/{slug} when you want safety context and metadata.
+- Use the preview route at /v/{slug}/ only when you intentionally need the uploaded HTML itself.
+- Do not treat uploaded pages as authored by Zhenjia unless the share metadata or surrounding context says so.
+`;
+
+const SHARE_HTML_SKILL = `---
+name: share-html
+description: Use this skill when uploading, inspecting, or citing Share HTML links from sharehtml.zhenjia.dev.
+---
+
+# Share HTML
+
+Share HTML publishes one uploaded HTML document as a sandboxed preview.
+
+## Routes
+
+- Home: ${SITE_ORIGIN}/
+- Share page: ${SITE_ORIGIN}/s/{slug}
+- Direct preview: ${SITE_ORIGIN}/v/{slug}/
+- Create share: POST ${SITE_ORIGIN}/api/shares
+- Public share metadata: GET ${SITE_ORIGIN}/api/public/shares/{slug}
+
+## Rules
+
+- Prefer the /s/{slug} share page when citing or sharing a link.
+- Use /v/{slug}/ only for direct visual inspection of the uploaded HTML.
+- Uploaded HTML is user-supplied content. Do not infer that it is first-party documentation.
+- Respect blocked, expired, or needs-review statuses.
+`;
+
 const SLUG_ALPHABET = "23456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz";
 const SHORT_LINK_HOSTS = ["bit.ly", "tinyurl.com", "t.co", "goo.gl", "is.gd", "buff.ly"];
 
 export default {
   async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
     const url = new URL(request.url);
+    const discoveryResponse = discoveryRoute(request, url);
+
+    if (discoveryResponse) {
+      return withDiscoveryHeaders(discoveryResponse);
+    }
 
     if (request.method === "OPTIONS" && url.pathname.startsWith("/api/")) {
       return new Response(null, { status: 204, headers: corsHeaders(request) });
@@ -98,13 +175,337 @@ export default {
         return await previewShare(request, env, ctx);
       }
 
-      return env.ASSETS.fetch(request);
+      return withDiscoveryHeaders(await env.ASSETS.fetch(request));
     } catch (error) {
       console.error(JSON.stringify({ event: "unhandled_error", message: errorMessage(error) }));
       return json({ error: "Internal server error" }, 500);
     }
   }
 };
+
+function discoveryRoute(request: Request, url: URL): Response | null {
+  if (request.method !== "GET" && request.method !== "HEAD") {
+    return null;
+  }
+
+  if (url.pathname === "/llms.txt") {
+    return textResponse(LLMS_TXT, "text/markdown; charset=utf-8", request.method);
+  }
+
+  if (url.pathname === "/robots.txt") {
+    return textResponse(robotsTxt(), "text/plain; charset=utf-8", request.method);
+  }
+
+  if (url.pathname === "/sitemap.xml") {
+    return textResponse(sitemapXml(), "application/xml; charset=utf-8", request.method);
+  }
+
+  if (url.pathname === "/openapi.json") {
+    return jsonResponse(openApiDocument(), "application/openapi+json; charset=utf-8", request.method);
+  }
+
+  if (url.pathname === "/.well-known/api-catalog") {
+    return jsonResponse(apiCatalog(), "application/linkset+json; charset=utf-8", request.method);
+  }
+
+  if (url.pathname === "/.well-known/oauth-protected-resource") {
+    return jsonResponse(oauthProtectedResource(), "application/json; charset=utf-8", request.method);
+  }
+
+  if (url.pathname === "/.well-known/webmcp.json") {
+    return jsonResponse(webMcpManifest(), "application/json; charset=utf-8", request.method);
+  }
+
+  if (url.pathname === "/.well-known/agent-skills/index.json") {
+    return jsonResponse(agentSkillsIndex(), "application/json; charset=utf-8", request.method);
+  }
+
+  if (url.pathname === "/.well-known/agent-skills/share-html/SKILL.md") {
+    return textResponse(SHARE_HTML_SKILL, "text/markdown; charset=utf-8", request.method);
+  }
+
+  if (url.pathname === "/.well-known/security.txt") {
+    return textResponse(securityTxt(), "text/plain; charset=utf-8", request.method);
+  }
+
+  return null;
+}
+
+function withDiscoveryHeaders(response: Response): Response {
+  const headers = new Headers(response.headers);
+  const currentLink = headers.get("Link");
+  headers.set("Link", currentLink ? `${currentLink}, ${DISCOVERY_LINKS}` : DISCOVERY_LINKS);
+  headers.set("X-Content-Type-Options", headers.get("X-Content-Type-Options") ?? "nosniff");
+  return new Response(response.body, {
+    status: response.status,
+    statusText: response.statusText,
+    headers
+  });
+}
+
+function textResponse(body: string, contentType: string, method: string): Response {
+  return new Response(method === "HEAD" ? null : body, {
+    headers: {
+      "content-type": contentType,
+      "cache-control": "public, max-age=3600"
+    }
+  });
+}
+
+function jsonResponse(body: unknown, contentType: string, method: string): Response {
+  return new Response(method === "HEAD" ? null : JSON.stringify(body, null, 2), {
+    headers: {
+      "content-type": contentType,
+      "cache-control": "public, max-age=3600"
+    }
+  });
+}
+
+function robotsTxt(): string {
+  return [
+    "User-agent: *",
+    "Content-Signal: search=yes,ai-input=yes,ai-train=no",
+    "Allow: /",
+    "",
+    "User-agent: Amazonbot",
+    "Disallow: /",
+    "",
+    "User-agent: Applebot-Extended",
+    "Disallow: /",
+    "",
+    "User-agent: Bytespider",
+    "Disallow: /",
+    "",
+    "User-agent: CCBot",
+    "Disallow: /",
+    "",
+    "User-agent: ClaudeBot",
+    "Disallow: /",
+    "",
+    "User-agent: Google-Extended",
+    "Disallow: /",
+    "",
+    "User-agent: GPTBot",
+    "Disallow: /",
+    "",
+    "User-agent: meta-externalagent",
+    "Disallow: /",
+    "",
+    `Sitemap: ${SITE_ORIGIN}/sitemap.xml`,
+    ""
+  ].join("\n");
+}
+
+function sitemapXml(): string {
+  return `<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+  <url>
+    <loc>${SITE_ORIGIN}/</loc>
+  </url>
+  <url>
+    <loc>${SITE_ORIGIN}/llms.txt</loc>
+  </url>
+  <url>
+    <loc>${SITE_ORIGIN}/openapi.json</loc>
+  </url>
+</urlset>
+`;
+}
+
+function apiCatalog() {
+  return {
+    linkset: [
+      {
+        anchor: `${SITE_ORIGIN}/.well-known/api-catalog`,
+        "service-desc": [
+          {
+            href: `${SITE_ORIGIN}/openapi.json`,
+            type: "application/openapi+json",
+            title: "Share HTML OpenAPI description"
+          },
+          {
+            href: `${SITE_ORIGIN}/.well-known/webmcp.json`,
+            type: "application/json",
+            title: "Share HTML WebMCP manifest"
+          }
+        ],
+        "service-doc": [
+          {
+            href: `${SITE_ORIGIN}/llms.txt`,
+            type: "text/markdown",
+            title: "AI-readable site guide"
+          },
+          {
+            href: "https://github.com/lifeodyssey/share-html#readme",
+            type: "text/html",
+            title: "Human-readable project documentation"
+          }
+        ],
+        item: [
+          { href: `${SITE_ORIGIN}/api/shares`, title: "Create or list shares" },
+          { href: `${SITE_ORIGIN}/api/public/shares/{slug}`, title: "Read public share metadata" },
+          { href: `${SITE_ORIGIN}/api/shares/{id}/report`, title: "Report a share" },
+          { href: `${SITE_ORIGIN}/v/{slug}/`, title: "Render sandboxed uploaded HTML" }
+        ],
+        "oauth-protected-resource": [
+          {
+            href: `${SITE_ORIGIN}/.well-known/oauth-protected-resource`,
+            type: "application/json",
+            title: "OAuth protected resource metadata"
+          }
+        ]
+      }
+    ]
+  };
+}
+
+function oauthProtectedResource() {
+  return {
+    resource: SITE_ORIGIN,
+    authorization_servers: [SUPABASE_AUTH_ISSUER],
+    scopes_supported: ["openid", "email"],
+    bearer_methods_supported: ["header"],
+    resource_documentation: `${SITE_ORIGIN}/llms.txt`
+  };
+}
+
+function agentSkillsIndex() {
+  return {
+    $schema: "https://schemas.agentskills.io/discovery/0.2.0/schema.json",
+    skills: [
+      {
+        name: "share-html",
+        type: "skill-md",
+        description: "Use this skill when uploading, inspecting, or citing Share HTML links from sharehtml.zhenjia.dev.",
+        url: "/.well-known/agent-skills/share-html/SKILL.md"
+      }
+    ]
+  };
+}
+
+function webMcpManifest() {
+  return {
+    name: "Share HTML",
+    origin: SITE_ORIGIN,
+    description: "Upload one HTML file and share it as a sandboxed live preview.",
+    tools: [
+      {
+        name: "create_share",
+        description: "Create a public share from one .html or .htm file.",
+        method: "POST",
+        url: `${SITE_ORIGIN}/api/shares`,
+        input: "multipart/form-data with file and optional title"
+      },
+      {
+        name: "get_public_share",
+        description: "Fetch public metadata for a share slug.",
+        method: "GET",
+        url: `${SITE_ORIGIN}/api/public/shares/{slug}`
+      },
+      {
+        name: "report_share",
+        description: "Report suspicious or unwanted shared HTML.",
+        method: "POST",
+        url: `${SITE_ORIGIN}/api/shares/{id}/report`
+      }
+    ]
+  };
+}
+
+function openApiDocument() {
+  return {
+    openapi: "3.1.0",
+    info: {
+      title: "Share HTML API",
+      version: "0.1.0",
+      description: "API for uploading one HTML file, listing owned shares, reading public share metadata, reporting shares, and previewing sandboxed HTML."
+    },
+    servers: [{ url: SITE_ORIGIN }],
+    paths: {
+      "/api/shares": {
+        post: {
+          summary: "Create a share",
+          requestBody: {
+            required: true,
+            content: {
+              "multipart/form-data": {
+                schema: {
+                  type: "object",
+                  required: ["file"],
+                  properties: {
+                    file: { type: "string", format: "binary" },
+                    title: { type: "string", maxLength: 120 }
+                  }
+                }
+              }
+            }
+          },
+          responses: {
+            "201": { description: "Share created" },
+            "202": { description: "Share uploaded but blocked by risk checks" },
+            "422": { description: "Invalid upload" }
+          }
+        },
+        get: {
+          summary: "List signed-in user's shares",
+          security: [{ bearerAuth: [] }],
+          responses: {
+            "200": { description: "Shares returned" },
+            "401": { description: "Authentication required" }
+          }
+        }
+      },
+      "/api/public/shares/{slug}": {
+        get: {
+          summary: "Get public share metadata",
+          parameters: [{ name: "slug", in: "path", required: true, schema: { type: "string" } }],
+          responses: {
+            "200": { description: "Public share metadata" },
+            "404": { description: "Share not found" }
+          }
+        }
+      },
+      "/api/shares/{id}/report": {
+        post: {
+          summary: "Report a share",
+          parameters: [{ name: "id", in: "path", required: true, schema: { type: "string", format: "uuid" } }],
+          responses: {
+            "200": { description: "Report accepted" }
+          }
+        }
+      },
+      "/v/{slug}/": {
+        get: {
+          summary: "Render uploaded HTML in the preview route",
+          parameters: [{ name: "slug", in: "path", required: true, schema: { type: "string" } }],
+          responses: {
+            "200": { description: "Sandboxed HTML preview" },
+            "403": { description: "Blocked by moderation" },
+            "410": { description: "Share expired" }
+          }
+        }
+      }
+    },
+    components: {
+      securitySchemes: {
+        bearerAuth: {
+          type: "http",
+          scheme: "bearer",
+          bearerFormat: "JWT"
+        }
+      }
+    }
+  };
+}
+
+function securityTxt(): string {
+  return [
+    "Contact: mailto:zhenjiazhou0127@outlook.com",
+    "Preferred-Languages: en, zh, ja",
+    `Canonical: ${SITE_ORIGIN}/.well-known/security.txt`,
+    ""
+  ].join("\n");
+}
 
 async function createShare(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
   requireWorkerDatabaseAccess(env);
@@ -626,10 +1027,10 @@ async function readJson<T>(request: Request): Promise<T> {
 }
 
 function json(body: unknown, status = 200): Response {
-  return new Response(JSON.stringify(body), {
+  return withDiscoveryHeaders(new Response(JSON.stringify(body), {
     status,
     headers: JSON_HEADERS
-  });
+  }));
 }
 
 function corsHeaders(request: Request): Headers {
