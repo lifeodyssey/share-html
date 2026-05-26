@@ -55,3 +55,18 @@ Typical setup:
 7. Send a test magic link and inspect the `From`, `Return-Path`, SPF, DKIM, and DMARC results in the received email headers.
 
 Important: disable click tracking in the email provider for auth emails. Supabase recommends avoiding provider link rewriting because magic links are one-time authentication URLs.
+
+## Cloudflare Email Service Option
+
+Cloudflare can own DNS for `zhenjia.dev` and can send mail for `sharehtml@zhenjia.dev` with Cloudflare Email Service, but it is not an SMTP server. That means it cannot be pasted directly into Supabase's Custom SMTP settings.
+
+To use Cloudflare for auth email sending, use Supabase's Send Email Auth Hook instead:
+
+1. Onboard `zhenjia.dev` in Cloudflare Email Sending.
+2. Add Cloudflare's sender DNS records for bounce handling, SPF, DKIM, and DMARC.
+3. Add a Cloudflare Worker endpoint or Supabase Edge Function for the Send Email hook.
+4. Verify the hook signature from Supabase.
+5. Send the Magic Link email through Cloudflare Email Service from `Share HTML <sharehtml@zhenjia.dev>`.
+6. Enable the hook in `Authentication -> Hooks -> Send Email`.
+
+This replaces Supabase's built-in email sending for auth messages. Supabase Custom SMTP remains the simpler path if you choose a provider with SMTP credentials.
