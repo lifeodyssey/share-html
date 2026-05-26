@@ -18,6 +18,76 @@
   </head>
   <body>
     <div id="root"></div>
+    <script>
+      (() => {
+        const provideShareHtmlContext = () => {
+          const modelContext = navigator.modelContext;
+          if (!modelContext || typeof modelContext.provideContext !== "function") return;
+
+          modelContext.provideContext({
+            tools: [
+              {
+                name: "describe_share_html",
+                description: "Return the Share HTML routes, API discovery URLs, and safety model.",
+                inputSchema: { type: "object", properties: {}, additionalProperties: false },
+                execute: async () => ({
+                  content: [
+                    {
+                      type: "text",
+                      text: [
+                        "# Share HTML",
+                        "",
+                        "Canonical origin: https://sharehtml.zhenjia.dev",
+                        "OpenAPI: https://sharehtml.zhenjia.dev/openapi.json",
+                        "AI guide: https://sharehtml.zhenjia.dev/llms.txt",
+                        "MCP endpoint: https://sharehtml.zhenjia.dev/mcp",
+                        "",
+                        "Use /s/{slug} for public share metadata and /v/{slug}/ for the sandboxed uploaded HTML preview."
+                      ].join("\n")
+                    }
+                  ]
+                })
+              },
+              {
+                name: "get_public_share",
+                description: "Fetch public metadata for a Share HTML slug.",
+                inputSchema: {
+                  type: "object",
+                  properties: {
+                    slug: { type: "string", description: "Public Share HTML slug" }
+                  },
+                  required: ["slug"],
+                  additionalProperties: false
+                },
+                execute: async (args) => {
+                  const slug = args && args.slug;
+                  if (typeof slug !== "string" || !slug) {
+                    return { content: [{ type: "text", text: "Missing required slug." }], isError: true };
+                  }
+
+                  const response = await fetch(`/api/public/shares/${encodeURIComponent(slug)}`);
+                  return {
+                    content: [
+                      {
+                        type: "text",
+                        text: await response.text()
+                      }
+                    ],
+                    isError: !response.ok
+                  };
+                }
+              }
+            ]
+          });
+        };
+
+        if (document.readyState === "loading") {
+          document.addEventListener("DOMContentLoaded", provideShareHtmlContext, { once: true });
+        } else {
+          provideShareHtmlContext();
+        }
+      })();
+    </script>
     <script type="module" src="/src/client/main.tsx"></script>
   </body>
 </html>

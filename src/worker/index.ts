@@ -43,7 +43,10 @@ const DISCOVERY_LINKS = [
   '</.well-known/api-catalog>; rel="api-catalog"; type="application/linkset+json"',
   '</openapi.json>; rel="service-desc"; type="application/openapi+json"',
   '</llms.txt>; rel="service-doc"; type="text/markdown"',
+  '</.well-known/openid-configuration>; rel="openid-configuration"; type="application/json"',
+  '</.well-known/oauth-authorization-server>; rel="oauth-authorization-server"; type="application/json"',
   '</.well-known/oauth-protected-resource>; rel="oauth-protected-resource"; type="application/json"',
+  '</.well-known/mcp/server-card.json>; rel="service-desc"; type="application/json"',
   '</.well-known/agent-skills/index.json>; rel="service-doc"; type="application/json"',
   '</.well-known/webmcp.json>; rel="service-desc"; type="application/json"'
 ].join(", ");
@@ -119,6 +122,14 @@ export default {
 
     if (discoveryResponse) {
       return withDiscoveryHeaders(discoveryResponse);
+    }
+
+    if (url.pathname === "/mcp") {
+      return await handleMcpRequest(request, env);
+    }
+
+    if (url.pathname === "/" && acceptsMarkdown(request)) {
+      return withDiscoveryHeaders(textResponse(LLMS_TXT, "text/markdown; charset=utf-8", request.method));
     }
 
     if (request.method === "OPTIONS" && url.pathname.startsWith("/api/")) {
@@ -212,6 +223,14 @@ function discoveryRoute(request: Request, url: URL): Response | null {
     return jsonResponse(oauthProtectedResource(), "application/json; charset=utf-8", request.method);
   }
 
+  if (url.pathname === "/.well-known/openid-configuration" || url.pathname === "/.well-known/oauth-authorization-server") {
+    return jsonResponse(oauthAuthorizationServer(), "application/json; charset=utf-8", request.method);
+  }
+
+  if (url.pathname === "/.well-known/mcp/server-card.json") {
+    return jsonResponse(mcpServerCard(), "application/json; charset=utf-8", request.method);
+  }
+
   if (url.pathname === "/.well-known/webmcp.json") {
     return jsonResponse(webMcpManifest(), "application/json; charset=utf-8", request.method);
   }
@@ -229,6 +248,11 @@ function discoveryRoute(request: Request, url: URL): Response | null {
   }
 
   return null;
+}
+
+function acceptsMarkdown(request: Request): boolean {
+  if (request.method !== "GET" && request.method !== "HEAD") return false;
+  return (request.headers.get("accept") || "").toLowerCase().includes("text/markdown");
 }
 
 function withDiscoveryHeaders(response: Response): Response {
@@ -369,6 +393,58 @@ function oauthProtectedResource() {
   };
 }
 
+function oauthAuthorizationServer() {
+  return {
+    issuer: SUPABASE_AUTH_ISSUER,
+    authorization_endpoint: `${SUPABASE_AUTH_ISSUER}/oauth/authorize`,
+    token_endpoint: `${SUPABASE_AUTH_ISSUER}/oauth/token`,
+    jwks_uri: `${SUPABASE_AUTH_ISSUER}/.well-known/jwks.json`,
+    userinfo_endpoint: `${SUPABASE_AUTH_ISSUER}/oauth/userinfo`,
+    scopes_supported: ["openid", "profile", "email", "phone"],
+    response_types_supported: ["code"],
+    response_modes_supported: ["query"],
+    grant_types_supported: ["authorization_code", "refresh_token"],
+    subject_types_supported: ["public"],
+    id_token_signing_alg_values_supported: ["RS256", "HS256", "ES256"],
+    token_endpoint_auth_methods_supported: ["client_secret_basic", "client_secret_post", "none"],
+    claims_supported: [
+      "sub",
+      "aud",
+      "iss",
+      "exp",
+      "iat",
+      "auth_time",
+      "nonce",
+      "email",
+      "email_verified",
+      "phone_number",
+      "phone_number_verified",
+      "name",
+      "picture",
+      "preferred_username",
+      "updated_at"
+    ],
+    code_challenge_methods_supported: ["S256", "plain"]
+  };
+}
+
+function mcpServerCard() {
+  return {
+    serverInfo: {
+      name: "Share HTML",
+      version: "0.1.0"
+    },
+    description: "Read Share HTML site context and public share metadata through MCP.",
+    url: `${SITE_ORIGIN}/mcp`,
+    transport: {
+      type: "streamable-http"
+    },
+    capabilities: {
+      tools: true
+    }
+  };
+}
+
 function agentSkillsIndex() {
   return {
     $schema: "https://schemas.agentskills.io/discovery/0.2.0/schema.json",
@@ -381,6 +457,127 @@ function agentSkillsIndex() {
       }
     ]
   };
+}
+
+async function handleMcpRequest(request: Request, env: Env): Promise<Response> {
+  if (request.method === "GET" || request.method === "HEAD") {
+    return withDiscoveryHeaders(jsonResponse(mcpServerCard(), "application/json; charset=utf-8", request.method));
+  }
+
+  if (request.method !== "POST") {
+    return withDiscoveryHeaders(new Response("Method Not Allowed", { status: 405, headers: { Allow: "GET, HEAD, POST" } }));
+  }
+
+  let payload: unknown;
+  try {
+    payload = await request.json();
+  } catch {
+    return mcpJson({ id: null, error: { code: -32700, message: "Parse error" } });
+  }
+
+  if (Array.isArray(payload)) {
+    const responses = (await Promise.all(payload.map((message) => handleMcpMessage(message, request, env)))).filter(Boolean);
+    return mcpJson(responses);
+  }
+
+  return mcpJson(await handleMcpMessage(payload, request, env));
+}
+
+async function handleMcpMessage(message: unknown, request: Request, env: Env): Promise<Record<string, unknown> | null> {
+  if (!isJsonRpcRequest(message)) {
+    return { id: null, error: { code: -32600, message: "Invalid Request" } };
+  }
+
+  if (!("id" in message)) return null;
+
+  try {
+    switch (message.method) {
+      case "initialize":
+        return mcpResult(message.id, {
+          protocolVersion: "2024-11-05",
+          capabilities: { tools: {} },
+          serverInfo: { name: "Share HTML", version: "0.1.0" }
+        });
+      case "tools/list":
+        return mcpResult(message.id, { tools: mcpTools() });
+      case "tools/call":
+        return await handleMcpToolCall(message.id, message.params, request, env);
+      default:
+        return { jsonrpc: "2.0", id: message.id, error: { code: -32601, message: "Method not found" } };
+    }
+  } catch (error) {
+    return { jsonrpc: "2.0", id: message.id, error: { code: -32000, message: errorMessage(error) } };
+  }
+}
+
+function isJsonRpcRequest(value: unknown): value is { id?: unknown; method: string; params?: unknown } {
+  return typeof value === "object" && value !== null && typeof (value as { method?: unknown }).method === "string";
+}
+
+function mcpResult(id: unknown, result: Record<string, unknown>): Record<string, unknown> {
+  return { jsonrpc: "2.0", id, result };
+}
+
+function mcpTools() {
+  return [
+    {
+      name: "describe_share_html",
+      description: "Return the AI-readable Share HTML guide, including routes and safety model.",
+      inputSchema: { type: "object", properties: {}, additionalProperties: false }
+    },
+    {
+      name: "get_public_share",
+      description: "Fetch public metadata for a Share HTML slug.",
+      inputSchema: {
+        type: "object",
+        properties: {
+          slug: { type: "string", description: "Public Share HTML slug" }
+        },
+        required: ["slug"],
+        additionalProperties: false
+      }
+    }
+  ];
+}
+
+async function handleMcpToolCall(
+  id: unknown,
+  params: unknown,
+  request: Request,
+  env: Env
+): Promise<Record<string, unknown>> {
+  const call = params as { name?: string; arguments?: Record<string, unknown> } | null;
+
+  if (call?.name === "describe_share_html") {
+    return mcpResult(id, { content: [{ type: "text", text: LLMS_TXT }] });
+  }
+
+  if (call?.name === "get_public_share") {
+    const slug = typeof call.arguments?.slug === "string" ? call.arguments.slug : "";
+    if (!slug) {
+      return mcpResult(id, { isError: true, content: [{ type: "text", text: "Missing required slug." }] });
+    }
+
+    const share = await getShareBySlug(env, slug);
+    if (!share || share.deleted_at) {
+      return mcpResult(id, { isError: true, content: [{ type: "text", text: "Share not found." }] });
+    }
+
+    return mcpResult(id, {
+      content: [
+        {
+          type: "text",
+          text: JSON.stringify(toPublicShare(share, request, env), null, 2)
+        }
+      ]
+    });
+  }
+
+  return mcpResult(id, { isError: true, content: [{ type: "text", text: "Unknown tool." }] });
+}
+
+function mcpJson(body: unknown): Response {
+  return withDiscoveryHeaders(new Response(JSON.stringify(body, null, 2), { headers: JSON_HEADERS }));
 }
 
 function webMcpManifest() {
