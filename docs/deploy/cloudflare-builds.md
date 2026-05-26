@@ -1,15 +1,14 @@
 # Cloudflare Workers Builds Deployment
 
-Share HTML uses GitHub Actions as the release gate and Cloudflare Workers Builds as the production deploy runner.
+Share HTML uses GitHub branch protection as the release gate and Cloudflare Workers Builds as the production deploy runner.
 
 The desired flow is:
 
 1. A pull request runs GitHub CI.
-2. After the PR is merged, the `main` push runs GitHub CI again.
-3. If GitHub CI passes, GitHub Actions sends a `POST` to a Cloudflare Workers Builds Deploy Hook.
-4. Cloudflare builds the connected repo and deploys the `share-html` Worker.
+2. GitHub branch protection requires the `Build` check to pass before code can land on `main`.
+3. After the PR is merged, Cloudflare Workers Builds sees the `main` push, builds that branch, and deploys the `share-html` Worker.
 
-This avoids storing a broad Cloudflare API token in GitHub.
+This avoids storing a Cloudflare API token or deploy hook URL in GitHub.
 
 ## GitHub Actions
 
@@ -23,17 +22,22 @@ npm run build
 npx wrangler deploy --dry-run
 ```
 
-On `main`, after those checks pass, it calls:
+The workflow uses GitHub's built-in `GITHUB_TOKEN` with read-only repository access; no Cloudflare secret is required.
 
-```bash
-curl --fail --show-error --request POST "$CLOUDFLARE_WORKERS_DEPLOY_HOOK_URL"
+## GitHub Branch Protection
+
+Protect the `main` branch with a required status check:
+
+```text
+Branch: main
+Required check: Build
+Require branches to be up to date before merging: enabled
+Apply protection to administrators: enabled
+Allow force pushes: disabled
+Allow deletions: disabled
 ```
 
-The hook URL must be stored as a GitHub repository secret:
-
-```bash
-gh secret set CLOUDFLARE_WORKERS_DEPLOY_HOOK_URL -R lifeodyssey/share-html --body '<deploy-hook-url>'
-```
+This makes `main` the release boundary. Cloudflare can listen to `main` because a commit should only arrive there after GitHub has accepted the required CI check.
 
 ## Cloudflare Setup
 
@@ -52,28 +56,19 @@ Build command: npm run build
 Deploy command: npx wrangler deploy
 ```
 
-6. Create a Deploy Hook:
-
-```text
-Name: github-ci-main
-Branch: main
-```
-
-7. Copy the generated URL into the GitHub secret `CLOUDFLARE_WORKERS_DEPLOY_HOOK_URL`.
-
-Important: do not leave a separate automatic Cloudflare production deploy active for every `main` push if the intent is strict GitHub CI gating. The deployment should be triggered by the GitHub workflow after CI passes.
+6. Disable builds for non-production branches unless preview builds are intentionally needed.
 
 ## How CI And Cloudflare Are Connected
 
 Cloudflare Workers Builds does not wait for GitHub Actions by itself. A normal Workers Builds Git integration starts from the Git push event.
 
-The connection is the Deploy Hook:
+The connection is GitHub branch protection:
 
-- GitHub CI is the gate.
-- The Deploy Hook is the handoff.
+- GitHub CI provides the required `Build` status check.
+- Branch protection prevents unchecked commits from landing on `main`.
 - Cloudflare Workers Builds is the deploy runner.
 
-If the GitHub build fails, the hook is never called and Cloudflare never starts the production deploy.
+If the GitHub build fails, the PR cannot merge into `main`, so Cloudflare never sees a production deploy event for that change.
 
 ## Manual Deploy
 

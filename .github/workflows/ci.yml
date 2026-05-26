@@ -1,4 +1,4 @@
-name: CI / Release Gate
+name: CI
 
 on:
   pull_request:
@@ -58,22 +58,3 @@ jobs:
 
       - name: Validate Worker bundle
         run: npx wrangler deploy --dry-run
-
-  trigger-cloudflare-build:
-    name: Trigger Cloudflare build
-    needs: build
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-    runs-on: ubuntu-latest
-    timeout-minutes: 5
-
-    steps:
-      - name: Trigger Workers Builds deploy hook
-        env:
-          CLOUDFLARE_WORKERS_DEPLOY_HOOK_URL: ${{ secrets.CLOUDFLARE_WORKERS_DEPLOY_HOOK_URL }}
-        run: |
-          if [ -z "$CLOUDFLARE_WORKERS_DEPLOY_HOOK_URL" ]; then
-            echo "::error::Missing CLOUDFLARE_WORKERS_DEPLOY_HOOK_URL repository secret."
-            exit 1
-          fi
-
-          curl --fail --show-error --request POST "$CLOUDFLARE_WORKERS_DEPLOY_HOOK_URL"

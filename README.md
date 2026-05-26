@@ -13,7 +13,7 @@
 <p align="center">
   <a href="https://sharehtml.zhenjia.dev"><img alt="Live site" src="https://img.shields.io/badge/live-sharehtml.zhenjia.dev-E85D3F?style=flat-square"></a>
   <a href="https://github.com/lifeodyssey/share-html"><img alt="Source on GitHub" src="https://img.shields.io/badge/source-GitHub-26322F?style=flat-square&logo=github"></a>
-  <a href="https://github.com/lifeodyssey/share-html/actions/workflows/ci.yml"><img alt="CI / Release Gate" src="https://img.shields.io/github/actions/workflow/status/lifeodyssey/share-html/ci.yml?branch=main&style=flat-square&label=CI%20%2F%20Release"></a>
+  <a href="https://github.com/lifeodyssey/share-html/actions/workflows/ci.yml"><img alt="CI" src="https://img.shields.io/github/actions/workflow/status/lifeodyssey/share-html/ci.yml?branch=main&style=flat-square&label=CI"></a>
   <img alt="Cloudflare Workers" src="https://img.shields.io/badge/Cloudflare-Workers-F38020?style=flat-square&logo=cloudflareworkers&logoColor=white">
   <img alt="Supabase" src="https://img.shields.io/badge/Supabase-Auth%20%2B%20Postgres-3FCF8E?style=flat-square&logo=supabase&logoColor=white">
   <img alt="TypeScript" src="https://img.shields.io/badge/TypeScript-5.9-3178C6?style=flat-square&logo=typescript&logoColor=white">
@@ -86,16 +86,13 @@ The branded Magic Link template and `sharehtml@zhenjia.dev` sender setup notes l
 
 Production runs as a Cloudflare Worker named `share-html`. The deployment source of truth is [`wrangler.jsonc`](./wrangler.jsonc): it defines the Worker entrypoint, static assets, custom domain, R2 bucket binding, and public runtime variables.
 
-Deployments are gated by GitHub Actions and executed by Cloudflare Workers Builds:
+Deployments are gated by GitHub branch protection and executed by Cloudflare Workers Builds:
 
 - Pull requests run `npm ci`, `npm run build`, and `npx wrangler deploy --dry-run`.
-- Pushes to `main` run the same checks first.
-- Only after those checks pass, GitHub Actions calls a Cloudflare Workers Builds Deploy Hook.
-- Cloudflare then runs the production build and deploys the Worker.
+- The `main` branch requires the `Build` check before changes can land.
+- Cloudflare Workers Builds watches `main`, builds that branch, and deploys the Worker after merge.
 
-This keeps the Cloudflare deploy credential out of GitHub. The only GitHub secret is:
-
-- `CLOUDFLARE_WORKERS_DEPLOY_HOOK_URL`: the Deploy Hook URL generated in Cloudflare for the `main` branch.
+This keeps Cloudflare deploy credentials out of GitHub. No Cloudflare API token or deploy hook secret is required in GitHub Actions.
 
 Cloudflare Workers Builds setup notes live in [`docs/deploy/cloudflare-builds.md`](./docs/deploy/cloudflare-builds.md).
 
