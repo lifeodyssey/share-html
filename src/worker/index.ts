@@ -326,12 +326,6 @@ function sitemapXml(): string {
   <url>
     <loc>${SITE_ORIGIN}/</loc>
   </url>
-  <url>
-    <loc>${SITE_ORIGIN}/llms.txt</loc>
-  </url>
-  <url>
-    <loc>${SITE_ORIGIN}/openapi.json</loc>
-  </url>
 </urlset>
 `;
 }
