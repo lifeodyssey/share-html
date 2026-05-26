@@ -1,7 +1,7 @@
 # Share HTML
 
 <p align="center">
-  <a href="https://sharehtml.zhenjia.org">
+  <a href="https://sharehtml.zhenjia.dev">
     <img src="./public/logo.svg" alt="Share HTML logo" width="112" height="112">
   </a>
 </p>
@@ -11,7 +11,7 @@
 </p>
 
 <p align="center">
-  <a href="https://sharehtml.zhenjia.org"><img alt="Live site" src="https://img.shields.io/badge/live-sharehtml.zhenjia.org-E85D3F?style=flat-square"></a>
+  <a href="https://sharehtml.zhenjia.dev"><img alt="Live site" src="https://img.shields.io/badge/live-sharehtml.zhenjia.dev-E85D3F?style=flat-square"></a>
   <a href="https://github.com/lifeodyssey/share-html"><img alt="Source on GitHub" src="https://img.shields.io/badge/source-GitHub-26322F?style=flat-square&logo=github"></a>
   <img alt="Cloudflare Workers" src="https://img.shields.io/badge/Cloudflare-Workers-F38020?style=flat-square&logo=cloudflareworkers&logoColor=white">
   <img alt="Supabase" src="https://img.shields.io/badge/Supabase-Auth%20%2B%20Postgres-3FCF8E?style=flat-square&logo=supabase&logoColor=white">
@@ -20,7 +20,7 @@
 
 ## Links
 
-- Live app: [https://sharehtml.zhenjia.org](https://sharehtml.zhenjia.org)
+- Live app: [https://sharehtml.zhenjia.dev](https://sharehtml.zhenjia.dev)
 - GitHub repo: [https://github.com/lifeodyssey/share-html](https://github.com/lifeodyssey/share-html)
 - Workers fallback: [https://share-html.zhenjiazhou0127.workers.dev](https://share-html.zhenjiazhou0127.workers.dev)
 
@@ -77,7 +77,7 @@ npx wrangler r2 bucket create share-html-prod
 
 Apply the Supabase migration in [`supabase/migrations/0001_share_html_schema.sql`](./supabase/migrations/0001_share_html_schema.sql).
 
-For production magic links, add `https://sharehtml.zhenjia.org` to the Supabase Auth site URL and redirect allow list.
+For production magic links, add `https://sharehtml.zhenjia.dev` to the Supabase Auth site URL and redirect allow list.
 
 ## Deploy
 
@@ -87,7 +87,7 @@ npm run deploy
 
 The Worker is configured with:
 
-- Custom domain: `sharehtml.zhenjia.org`
+- Custom domain: `sharehtml.zhenjia.dev`
 - Workers fallback: `share-html.zhenjiazhou0127.workers.dev`
 - R2 bucket: `share-html-prod`
 
