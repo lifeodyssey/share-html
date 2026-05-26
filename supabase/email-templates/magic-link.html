@@ -1,0 +1,87 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Sign in to Share HTML</title>
+  </head>
+  <body style="margin:0; padding:0; background:#f4f1e8; color:#26322f; font-family:Avenir Next, Segoe UI, Arial, sans-serif;">
+    <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background:#f4f1e8; background-image:linear-gradient(90deg, rgba(38,50,47,0.06) 1px, transparent 1px), linear-gradient(0deg, rgba(38,50,47,0.05) 1px, transparent 1px); background-size:32px 32px;">
+      <tr>
+        <td align="center" style="padding:40px 16px;">
+          <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="max-width:560px; border:2px solid #26322f; border-radius:10px; background:#fff9ec; box-shadow:8px 8px 0 #26322f;">
+            <tr>
+              <td style="padding:28px 28px 14px;">
+                <table role="presentation" cellspacing="0" cellpadding="0">
+                  <tr>
+                    <td width="44" height="44" align="center" style="border:2px solid #26322f; border-radius:8px; background:#fffefa; font-weight:800; font-size:17px; color:#2d6241;">
+                      &lt;/&gt;
+                    </td>
+                    <td style="padding-left:12px; font-weight:800; font-size:18px; color:#26322f;">
+                      Share HTML
+                    </td>
+                  </tr>
+                </table>
+              </td>
+            </tr>
+
+            <tr>
+              <td style="padding:6px 28px 0;">
+                <p style="margin:0 0 10px; color:#846428; font-size:12px; font-weight:800; text-transform:uppercase;">
+                  Magic sign-in link
+                </p>
+                <h1 style="margin:0; font-size:34px; line-height:1.08; letter-spacing:0; color:#26322f;">
+                  Sign in to keep your HTML shares.
+                </h1>
+              </td>
+            </tr>
+
+            <tr>
+              <td style="padding:18px 28px 0;">
+                <p style="margin:0; color:#4d5b55; font-size:16px; line-height:1.55;">
+                  Use this one-time link to sign in to Share HTML. It lets you keep uploaded pages, delete them later, and claim anonymous uploads.
+                </p>
+              </td>
+            </tr>
+
+            <tr>
+              <td align="left" style="padding:26px 28px 12px;">
+                <a href="{{ .ConfirmationURL }}" style="display:inline-block; border:2px solid #26322f; border-radius:7px; background:#e85d3f; color:#fff8eb; font-size:16px; font-weight:800; text-decoration:none; padding:13px 20px;">
+                  Sign in to Share HTML
+                </a>
+              </td>
+            </tr>
+
+            <tr>
+              <td style="padding:8px 28px 0;">
+                <p style="margin:0; color:#657069; font-size:13px; line-height:1.5;">
+                  If the button does not work, copy this link into your browser:
+                </p>
+                <p style="margin:8px 0 0; word-break:break-all; color:#2d6241; font-size:13px; line-height:1.45;">
+                  {{ .ConfirmationURL }}
+                </p>
+              </td>
+            </tr>
+
+            <tr>
+              <td style="padding:22px 28px 28px;">
+                <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="border-top:1px solid rgba(38,50,47,0.18);">
+                  <tr>
+                    <td style="padding-top:16px; color:#657069; font-size:12px; line-height:1.5;">
+                      This link only signs you in. It does not publish, edit, or share any HTML by itself. You can ignore this email if you did not request it.
+                    </td>
+                  </tr>
+                  <tr>
+                    <td style="padding-top:10px; color:#657069; font-size:12px; line-height:1.5;">
+                      Sent for {{ .SiteURL }}
+                    </td>
+                  </tr>
+                </table>
+              </td>
+            </tr>
+          </table>
+        </td>
+      </tr>
+    </table>
+  </body>
+</html>

@@ -79,6 +79,8 @@ Apply the Supabase migration in [`supabase/migrations/0001_share_html_schema.sql
 
 For production magic links, add `https://sharehtml.zhenjia.dev` to the Supabase Auth site URL and redirect allow list.
 
+The branded Magic Link template and `sharehtml@zhenjia.dev` sender setup notes live in [`docs/email/auth-email-setup.md`](./docs/email/auth-email-setup.md).
+
 ## Deploy
 
 ```bash
