@@ -1,12 +1,21 @@
 import type { PublicShare, RiskReason, ShareRecord } from "../shared/types";
+import {
+  buildAuthEmailPlan,
+  parseSupabaseSendEmailPayload,
+  verifyStandardWebhookSignature
+} from "./auth-email";
 
 type Env = {
   ASSETS: Fetcher;
+  AUTH_EMAIL?: SendEmail;
   SHARE_HTML_BUCKET: R2Bucket;
   SUPABASE_URL: string;
   SUPABASE_PUBLISHABLE_KEY: string;
   SUPABASE_REST_KEY: string;
   WORKER_API_SECRET: string;
+  SUPABASE_SEND_EMAIL_HOOK_SECRET?: string;
+  AUTH_EMAIL_FROM?: string;
+  AUTH_EMAIL_FROM_NAME?: string;
   APP_ORIGIN?: string;
   PREVIEW_ORIGIN?: string;
   IP_HASH_SALT?: string;
@@ -65,6 +74,7 @@ Share HTML is a Cloudflare-hosted tool for uploading one self-contained HTML fil
 
 - App home: ${SITE_ORIGIN}/
 - Create share API: POST ${SITE_ORIGIN}/api/shares
+- Supabase auth email hook: POST ${SITE_ORIGIN}/api/auth/supabase/send-email
 - List signed-in user's shares: GET ${SITE_ORIGIN}/api/shares
 - Public share API: GET ${SITE_ORIGIN}/api/public/shares/{slug}
 - Public share page: ${SITE_ORIGIN}/s/{slug}
@@ -75,7 +85,7 @@ Share HTML is a Cloudflare-hosted tool for uploading one self-contained HTML fil
 ## Safety Model
 
 - Uploaded HTML is not sanitized. It is isolated in a sandboxed preview route.
-- Anonymous uploads expire after 7 days.
+- Anonymous uploads expire after 365 days.
 - Signed-in users can keep and delete shares.
 - A lightweight scanner can mark uploads clean, suspicious, needs review, or blocked.
 - Private R2 objects are only read by this Worker.
@@ -142,6 +152,11 @@ export default {
           supabaseUrl: env.SUPABASE_URL,
           supabasePublishableKey: env.SUPABASE_PUBLISHABLE_KEY
         });
+      }
+
+      if (url.pathname === "/api/auth/supabase/send-email") {
+        if (request.method !== "POST") return methodNotAllowed("POST");
+        return await sendSupabaseAuthEmail(request, env);
       }
 
       if (url.pathname === "/api/shares" && request.method === "POST") {
@@ -361,6 +376,7 @@ function apiCatalog() {
         ],
         item: [
           { href: `${SITE_ORIGIN}/api/shares`, title: "Create or list shares" },
+          { href: `${SITE_ORIGIN}/api/auth/supabase/send-email`, title: "Handle Supabase auth email delivery" },
           { href: `${SITE_ORIGIN}/api/public/shares/{slug}`, title: "Read public share metadata" },
           { href: `${SITE_ORIGIN}/api/shares/{id}/report`, title: "Report a share" },
           { href: `${SITE_ORIGIN}/v/{slug}/`, title: "Render sandboxed uploaded HTML" }
@@ -656,6 +672,17 @@ function openApiDocument() {
           }
         }
       },
+      "/api/auth/supabase/send-email": {
+        post: {
+          summary: "Handle Supabase Send Email Auth Hook",
+          description: "Internal endpoint called by Supabase Auth. Verifies Standard Webhooks headers, renders Share HTML auth email, and sends it through Cloudflare Email Service.",
+          responses: {
+            "200": { description: "Email accepted by Cloudflare Email Service" },
+            "401": { description: "Invalid hook signature" },
+            "500": { description: "Email binding or hook secret is not configured" }
+          }
+        }
+      },
       "/api/shares/{id}/report": {
         post: {
           summary: "Report a share",
@@ -741,7 +768,7 @@ async function createShare(request: Request, env: Env, ctx: ExecutionContext): P
   const contentHash = await sha256Hex(html);
   const scan = scanHtml(html);
   const now = new Date();
-  const expiresAt = user ? null : new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000).toISOString();
+  const expiresAt = user ? null : new Date(now.getTime() + 365 * 24 * 60 * 60 * 1000).toISOString();
   const title = cleanTitle(form.get("title"), html);
   const r2Prefix = `shares/${shareId}/`;
   const r2Key = `${r2Prefix}index.html`;
@@ -799,6 +826,67 @@ async function createShare(request: Request, env: Env, ctx: ExecutionContext): P
     });
     console.error(JSON.stringify({ event: "upload_failed", share_id: shareId, message: errorMessage(error) }));
     return json({ error: "Upload failed after metadata was created." }, 500);
+  }
+}
+
+async function sendSupabaseAuthEmail(request: Request, env: Env): Promise<Response> {
+  if (!env.AUTH_EMAIL) {
+    return json({ error: "Cloudflare Email binding is not configured." }, 500);
+  }
+  if (!env.SUPABASE_SEND_EMAIL_HOOK_SECRET) {
+    return json({ error: "Supabase send-email hook secret is not configured." }, 500);
+  }
+
+  const rawBody = await request.text();
+  const verified = await verifyStandardWebhookSignature({
+    rawBody,
+    secret: env.SUPABASE_SEND_EMAIL_HOOK_SECRET,
+    headers: request.headers
+  });
+  if (!verified) {
+    return json({ error: "Invalid hook signature." }, 401);
+  }
+
+  const payload = (() => {
+    try {
+      return parseSupabaseSendEmailPayload(rawBody);
+    } catch (error) {
+      console.error(JSON.stringify({ event: "auth_email_payload_invalid", message: errorMessage(error) }));
+      return null;
+    }
+  })();
+  if (!payload) {
+    return json({ error: "Invalid auth email payload." }, 400);
+  }
+
+  const messages = buildAuthEmailPlan(payload, {
+    appOrigin: env.APP_ORIGIN ?? SITE_ORIGIN,
+    fromAddress: env.AUTH_EMAIL_FROM ?? "sharehtml@zhenjia.dev",
+    fromName: env.AUTH_EMAIL_FROM_NAME ?? "Share HTML",
+    supabaseUrl: env.SUPABASE_URL
+  });
+
+  try {
+    for (const plan of messages) {
+      await env.AUTH_EMAIL.send({
+        from: { email: plan.fromAddress, name: plan.fromName },
+        to: plan.to,
+        subject: plan.subject,
+        text: plan.text,
+        html: plan.html
+      });
+    }
+
+    console.log(JSON.stringify({
+      event: "auth_email_sent",
+      action_type: payload.email_data.email_action_type,
+      message_count: messages.length
+    }));
+
+    return json({});
+  } catch (error) {
+    console.error(JSON.stringify({ event: "auth_email_failed", message: errorMessage(error) }));
+    return json({ error: "Auth email delivery failed." }, 502);
   }
 }
 
@@ -1221,6 +1309,13 @@ function json(body: unknown, status = 200): Response {
   return withDiscoveryHeaders(new Response(JSON.stringify(body), {
     status,
     headers: JSON_HEADERS
+  }));
+}
+
+function methodNotAllowed(allow: string): Response {
+  return withDiscoveryHeaders(new Response("Method Not Allowed", {
+    status: 405,
+    headers: { Allow: allow }
   }));
 }
 
