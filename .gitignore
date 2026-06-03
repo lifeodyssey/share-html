@@ -7,3 +7,4 @@ dist
 !.env.example
 *.local
 worker-configuration.d.ts
+.codegraph

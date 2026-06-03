@@ -25,12 +25,18 @@
 - GitHub repo: [https://github.com/lifeodyssey/share-html](https://github.com/lifeodyssey/share-html)
 - Workers fallback: [https://share-html.zhenjiazhou0127.workers.dev](https://share-html.zhenjiazhou0127.workers.dev)
 
+## Project Docs
+
+- Product and system spec: [docs/project/spec.md](./docs/project/spec.md)
+- Current progress: [docs/project/progress.md](./docs/project/progress.md)
+- Roadmap: [docs/project/roadmap.md](./docs/project/roadmap.md)
+
 ## What It Does
 
 Share HTML is a small Cloudflare-hosted tool for sharing self-contained HTML files. It is useful for quick prototypes, mockups, receipts, tiny demos, and one-off pages that need a URL without setting up a site.
 
 - Anonymous upload flow with a 7-day expiry.
-- Supabase magic-link sign-in for keeping and deleting shares.
+- Supabase magic-link sign-in for keeping and deleting shares, with auth email delivery handled by Cloudflare Email Service.
 - Claim token flow for attaching an anonymous upload to an account later.
 - Public share page with status, risk score, and embedded preview.
 - Direct preview URL for opening the uploaded HTML by itself.
@@ -49,6 +55,7 @@ Share HTML intentionally exposes two different URLs after upload:
 
 - Cloudflare Workers Static Assets for the app shell and API.
 - Cloudflare R2 for uploaded HTML objects.
+- Cloudflare Email Service for branded auth email delivery.
 - Supabase Auth for magic-link users.
 - Supabase Postgres for metadata, reports, events, and moderation state.
 - React, Vite, and TypeScript for the frontend.
@@ -68,6 +75,7 @@ Set these Cloudflare Worker secrets before production deploy:
 printf '%s' '<legacy-anon-key>' | npx wrangler secret put SUPABASE_REST_KEY
 printf '%s' '<worker-api-secret>' | npx wrangler secret put WORKER_API_SECRET
 printf '%s' '<random-salt>' | npx wrangler secret put IP_HASH_SALT
+printf '%s' 'v1,whsec_...' | npx wrangler secret put SUPABASE_SEND_EMAIL_HOOK_SECRET
 ```
 
 Create the R2 bucket once:
@@ -80,7 +88,7 @@ Apply the Supabase migration in [`supabase/migrations/0001_share_html_schema.sql
 
 For production magic links, add `https://sharehtml.zhenjia.dev` to the Supabase Auth site URL and redirect allow list.
 
-The branded Magic Link template and `sharehtml@zhenjia.dev` sender setup notes live in [`docs/email/auth-email-setup.md`](./docs/email/auth-email-setup.md).
+The Cloudflare Email Service hook and `sharehtml@zhenjia.dev` sender setup notes live in [`docs/email/auth-email-setup.md`](./docs/email/auth-email-setup.md).
 
 ## Deploy
 

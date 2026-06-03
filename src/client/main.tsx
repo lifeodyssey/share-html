@@ -99,7 +99,7 @@ function Header({ user, supabase, onHome }: { user: User | null; supabase: Supab
             <button className="button secondary" onClick={() => supabase.auth.signOut()}>Sign out</button>
           </>
         ) : (
-          <span className="account-email">Anonymous uploads expire in 7 days</span>
+          <span className="account-email">Anonymous uploads expire in 365 days</span>
         )}
       </div>
     </header>
