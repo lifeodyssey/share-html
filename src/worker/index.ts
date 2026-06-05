@@ -32,6 +32,13 @@ import {
   parseSupabaseSendEmailPayload,
   verifyStandardWebhookSignature
 } from "./auth-email.ts";
+import {
+  type AuthUser,
+  getUserFromToken,
+  getOptionalUser,
+  requireUser,
+  requireAdmin,
+} from "./auth.ts";
 import { LLMS_TXT, SHARE_HTML_SKILL, SITE_ORIGIN } from "./constants.ts";
 import {
   acceptsMarkdown,
@@ -74,13 +81,6 @@ type Env = {
   IP_HASH_SALT?: string;
   MAX_ANON_HTML_BYTES?: string;
   MAX_USER_HTML_BYTES?: string;
-};
-
-type AuthUser = {
-  id: string;
-  email?: string;
-  role: "user" | "admin";
-  banned_at: string | null;
 };
 
 const JSON_HEADERS = {
@@ -726,62 +726,9 @@ async function checkUploadRate(env: Env, user: AuthUser | null, ipHash: string):
   return { allowed: true };
 }
 
-export async function getOptionalUser(request: Request, env: Env): Promise<AuthUser | null> {
-  const header = request.headers.get("authorization");
-  if (!header?.startsWith("Bearer ")) return null;
-  try {
-    return await getUserFromToken(header.slice("Bearer ".length), env);
-  } catch {
-    return null;
-  }
-}
-
-export async function requireUser(request: Request, env: Env): Promise<AuthUser | Response> {
-  const header = request.headers.get("authorization");
-  if (!header?.startsWith("Bearer ")) return json({ error: "Authentication required." }, 401);
-  try {
-    return await getUserFromToken(header.slice("Bearer ".length), env);
-  } catch {
-    return json({ error: "Invalid session." }, 401);
-  }
-}
-
-export async function requireAdmin(request: Request, env: Env): Promise<AuthUser | Response> {
-  const user = await requireUser(request, env);
-  if (user instanceof Response) return user;
-  if (user.role !== "admin") return json({ error: "Admin access required." }, 403);
-  return user;
-}
-
-export async function getUserFromToken(token: string, env: Env): Promise<AuthUser> {
-  requireWorkerDatabaseAccess(env);
-  const response = await fetch(`${env.SUPABASE_URL}/auth/v1/user`, {
-    headers: {
-      apikey: env.SUPABASE_PUBLISHABLE_KEY,
-      authorization: `Bearer ${token}`
-    }
-  });
-
-  if (!response.ok) throw new Error(`Supabase auth returned ${response.status}`);
-  const raw = await response.json<{ id: string; email?: string }>();
-  const [profile] = await restSelect<{ role: "user" | "admin"; banned_at: string | null }>(
-    env,
-    `profiles?select=role,banned_at&id=eq.${raw.id}&limit=1`
-  );
-
-  if (!profile) {
-    await restInsert(env, "profiles", { id: raw.id, display_name: raw.email?.split("@")[0] ?? "User" });
-  }
-
-  return {
-    id: raw.id,
-    email: raw.email,
-    role: profile?.role ?? "user",
-    banned_at: profile?.banned_at ?? null
-  };
-}
-
 export { randomSlug, createSecretToken, createUniqueSlug, getShareBySlug, logShareEvent, restSelect, restInsert, restUpdate, restRequest, toPublicShare, requireWorkerDatabaseAccess };
+export { getUserFromToken, getOptionalUser, requireUser, requireAdmin };
+export type { AuthUser };
 export { cleanTitle, sanitizeShortText, looksLikeHtml, isUploadFile, getClientIp, sha256Hex, hashText, base64Url, numberEnv, formatBytes, escapeHtml, errorMessage, logBackgroundError } from "./utils.ts";
 
 function previewHeaders(request: Request, env: Env, extra: HeadersInit = {}): Headers {

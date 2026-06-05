@@ -6,7 +6,7 @@ import {
   getOptionalUser,
   requireUser,
   requireAdmin,
-} from "../src/worker/index.ts";
+} from "../src/worker/auth.ts";
 
 // ---------------------------------------------------------------------------
 // Helpers
