@@ -86,6 +86,33 @@
                   };
                 }
               }
+              ,{
+                name: "create_share",
+                description: "Publish/host/share a single HTML page. Returns a public sandboxed shareable URL.",
+                inputSchema: {
+                  type: "object",
+                  properties: {
+                    html: { type: "string", description: "The full HTML document to publish." },
+                    title: { type: "string", description: "Optional title." }
+                  },
+                  required: ["html"],
+                  additionalProperties: false
+                },
+                execute: async (args) => {
+                  const html = args && args.html;
+                  if (typeof html !== "string" || !html) {
+                    return { content: [{ type: "text", text: "Missing required html." }], isError: true };
+                  }
+                  const body = new FormData();
+                  body.set("file", new Blob([html], { type: "text/html" }), "index.html");
+                  if (args.title) body.set("title", String(args.title));
+                  const response = await fetch("/api/shares", { method: "POST", body });
+                  return {
+                    content: [{ type: "text", text: await response.text() }],
+                    isError: !response.ok
+                  };
+                }
+              }
             ]
           });
         };
