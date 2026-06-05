@@ -277,7 +277,8 @@ async function sendSupabaseAuthEmail(request: Request, env: Env): Promise<Respon
   }
 }
 
-export { randomSlug, createSecretToken, createUniqueSlug, getShareBySlug, logShareEvent, restSelect, restInsert, restUpdate, restRequest, toPublicShare, requireWorkerDatabaseAccess } from "./db.ts";
+export { randomSlug, createSecretToken, createUniqueSlug, getShareBySlug, logShareEvent, toPublicShare, requireWorkerDatabaseAccess } from "./db.ts";
+export { countRecentUploadsByIp, countRecentUploadsByUser, insertShare, insertShareAsset, updateShareScanResult, findUserShares, insertReport, getOpenReports, findClaimableShare, claimShareRow, softDeleteShare, setShareModeration, getUserProfile, insertUserProfile } from "./db.ts";
 export { getUserFromToken, getOptionalUser, requireUser, requireAdmin } from "./auth.ts";
 export type { AuthUser } from "./auth.ts";
 export { cleanTitle, sanitizeShortText, looksLikeHtml, isUploadFile, getClientIp, sha256Hex, hashText, base64Url, numberEnv, formatBytes, escapeHtml, errorMessage, logBackgroundError } from "./utils.ts";

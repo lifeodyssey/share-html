@@ -14,15 +14,24 @@ import {
   sha256Hex,
 } from "./utils.ts";
 import {
+  claimShareRow,
+  countRecentUploadsByIp,
+  countRecentUploadsByUser,
   createSecretToken,
   createUniqueSlug,
+  findClaimableShare,
+  findUserShares,
+  getOpenReports,
   getShareBySlug,
+  insertReport,
+  insertShare,
+  insertShareAsset,
   logShareEvent,
   requireWorkerDatabaseAccess,
-  restInsert,
-  restSelect,
-  restUpdate,
+  setShareModeration,
+  softDeleteShare,
   toPublicShare,
+  updateShareScanResult,
 } from "./db.ts";
 import { scanHtml } from "./scan.ts";
 import {
@@ -119,7 +128,7 @@ export async function createShareRecord(
   const r2Prefix = `shares/${shareId}/`;
   const r2Key = `${r2Prefix}index.html`;
 
-  await restInsert<ShareRecord>(env, "shares", {
+  await insertShare(env, {
     id: shareId,
     slug,
     owner_user_id: user?.id ?? null,
@@ -144,7 +153,7 @@ export async function createShareRecord(
       customMetadata: { share_id: shareId, content_hash: contentHash }
     });
 
-    await restInsert(env, "share_assets", {
+    await insertShareAsset(env, {
       share_id: shareId,
       path: "index.html",
       r2_key: r2Key,
@@ -153,7 +162,7 @@ export async function createShareRecord(
       content_hash: contentHash
     });
 
-    const [share] = await restUpdate<ShareRecord>(env, "shares", `id=eq.${shareId}`, {
+    const [share] = await updateShareScanResult(env, shareId, {
       lifecycle_status: scan.lifecycle,
       moderation_status: scan.status
     });
@@ -169,7 +178,7 @@ export async function createShareRecord(
       }
     };
   } catch (error) {
-    await restUpdate(env, "shares", `id=eq.${shareId}`, {
+    await updateShareScanResult(env, shareId, {
       lifecycle_status: "failed",
       moderation_status: "pending"
     });
@@ -180,14 +189,21 @@ export async function createShareRecord(
 
 export async function checkUploadRate(env: Env, user: AuthUser | null, ipHash: string): Promise<{ allowed: boolean; reason?: string }> {
   const since = new Date(Date.now() - 60 * 60 * 1000).toISOString();
-  const filter = user
-    ? `owner_user_id=eq.${user.id}&created_at=gte.${encodeURIComponent(since)}`
-    : `creator_ip_hash=eq.${encodeURIComponent(ipHash)}&created_at=gte.${encodeURIComponent(since)}`;
-  const limit = user ? 100 : 10;
-  const rows = await restSelect<{ id: string }>(env, `shares?select=id&${filter}&limit=${limit + 1}`);
-  if (rows.length > limit) {
-    return { allowed: false, reason: user ? "User upload limit reached. Try again later." : "Anonymous upload limit reached. Try again later." };
+
+  if (user) {
+    const limit = 100;
+    const count = await countRecentUploadsByUser(env, user.id, since, limit);
+    if (count > limit) {
+      return { allowed: false, reason: "User upload limit reached. Try again later." };
+    }
+  } else {
+    const limit = 10;
+    const count = await countRecentUploadsByIp(env, ipHash, since, limit);
+    if (count > limit) {
+      return { allowed: false, reason: "Anonymous upload limit reached. Try again later." };
+    }
   }
+
   return { allowed: true };
 }
 
@@ -195,10 +211,7 @@ export async function listMyShares(request: Request, env: Env): Promise<Response
   const user = await requireUser(request, env);
   if (user instanceof Response) return user;
 
-  const shares = await restSelect<ShareRecord>(
-    env,
-    `shares?select=*&owner_user_id=eq.${user.id}&deleted_at=is.null&order=created_at.desc&limit=100`
-  );
+  const shares = await findUserShares(env, user.id);
 
   return json({ shares: shares.map((share) => toPublicShare(share, request, env)) });
 }
@@ -218,7 +231,7 @@ export async function reportShare(shareId: string, request: Request, env: Env, c
   const ipHash = await hashText(getClientIp(request), env.IP_HASH_SALT ?? env.WORKER_API_SECRET);
   const uaHash = await hashText(request.headers.get("user-agent") ?? "unknown", env.IP_HASH_SALT ?? env.WORKER_API_SECRET);
 
-  await restInsert(env, "reports", {
+  await insertReport(env, {
     share_id: shareId,
     reporter_user_id: user?.id ?? null,
     reason,
@@ -237,17 +250,11 @@ export async function claimShare(shareId: string, request: Request, env: Env, ct
   if (!body.claimToken) return json({ error: "Missing claim token." }, 422);
 
   const claimTokenHash = await hashText(body.claimToken, env.WORKER_API_SECRET);
-  const [share] = await restSelect<ShareRecord>(
-    env,
-    `shares?select=*&id=eq.${shareId}&claim_token_hash=eq.${encodeURIComponent(claimTokenHash)}&owner_user_id=is.null&limit=1`
-  );
+  const share = await findClaimableShare(env, shareId, claimTokenHash);
   if (!share) return json({ error: "Invalid claim token." }, 403);
 
-  const [updated] = await restUpdate<ShareRecord>(env, "shares", `id=eq.${shareId}`, {
-    owner_user_id: user.id,
-    claim_token_hash: null,
-    expires_at: null
-  });
+  const updated = await claimShareRow(env, shareId, user.id);
+  if (!updated) return json({ error: "Invalid claim token." }, 403);
 
   ctx.waitUntil(logShareEvent(env, shareId, user.id, "claimed", null, null, {}).catch(logBackgroundError));
   return json({ share: toPublicShare(updated, request, env) });
@@ -257,11 +264,7 @@ export async function deleteShare(shareId: string, request: Request, env: Env, c
   const user = await requireUser(request, env);
   if (user instanceof Response) return user;
 
-  const filter = user.role === "admin" ? `id=eq.${shareId}` : `id=eq.${shareId}&owner_user_id=eq.${user.id}`;
-  const [updated] = await restUpdate<ShareRecord>(env, "shares", filter, {
-    lifecycle_status: "deleted",
-    deleted_at: new Date().toISOString()
-  });
+  const updated = await softDeleteShare(env, shareId, user.role === "admin", user.id);
 
   if (!updated) return json({ error: "Share not found." }, 404);
   ctx.waitUntil(logShareEvent(env, shareId, user.id, "deleted", null, null, {}).catch(logBackgroundError));
@@ -272,7 +275,7 @@ export async function listReports(request: Request, env: Env): Promise<Response>
   const admin = await requireAdmin(request, env);
   if (admin instanceof Response) return admin;
 
-  const reports = await restSelect(env, "reports?select=*&status=eq.open&order=created_at.desc&limit=100");
+  const reports = await getOpenReports(env);
   return json({ reports });
 }
 
@@ -284,7 +287,7 @@ export async function moderateShare(shareId: string, action: "block" | "unblock"
     ? { lifecycle_status: "blocked", moderation_status: "blocked" }
     : { lifecycle_status: "active", moderation_status: "clean", risk_score: 0, risk_reasons: [] };
 
-  const [share] = await restUpdate<ShareRecord>(env, "shares", `id=eq.${shareId}`, patch);
+  const share = await setShareModeration(env, shareId, patch);
   if (!share) return json({ error: "Share not found." }, 404);
 
   ctx.waitUntil(logShareEvent(env, shareId, admin.id, action === "block" ? "blocked" : "unblocked", null, null, {}).catch(logBackgroundError));

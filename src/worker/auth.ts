@@ -1,8 +1,8 @@
 import { json } from "./http.ts";
 import {
+  getUserProfile,
+  insertUserProfile,
   requireWorkerDatabaseAccess,
-  restInsert,
-  restSelect,
 } from "./db.ts";
 
 // Minimal structural interface covering the env fields used by auth helpers.
@@ -32,13 +32,10 @@ export async function getUserFromToken(token: string, env: AuthEnv): Promise<Aut
 
   if (!response.ok) throw new Error(`Supabase auth returned ${response.status}`);
   const raw = await response.json<{ id: string; email?: string }>();
-  const [profile] = await restSelect<{ role: "user" | "admin"; banned_at: string | null }>(
-    env,
-    `profiles?select=role,banned_at&id=eq.${raw.id}&limit=1`
-  );
+  const profile = await getUserProfile(env, raw.id);
 
   if (!profile) {
-    await restInsert(env, "profiles", { id: raw.id, display_name: raw.email?.split("@")[0] ?? "User" });
+    await insertUserProfile(env, raw.id, raw.email?.split("@")[0] ?? "User");
   }
 
   return {
