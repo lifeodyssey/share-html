@@ -7,7 +7,7 @@ import {
   mcpTools,
   handleMcpMessage,
   handleMcpToolCall,
-} from "../src/worker/index.ts";
+} from "../src/worker/mcp.ts";
 
 import { LLMS_TXT } from "../src/worker/constants.ts";
 
