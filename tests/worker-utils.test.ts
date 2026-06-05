@@ -13,7 +13,7 @@ import {
   numberEnv,
   sanitizeShortText,
   sha256Hex,
-} from "../src/worker/index.ts";
+} from "../src/worker/utils.ts";
 
 // ---------------------------------------------------------------------------
 // looksLikeHtml
