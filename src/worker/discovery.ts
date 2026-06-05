@@ -1,4 +1,4 @@
-import { SITE_ORIGIN, SUPABASE_AUTH_ISSUER } from "./constants";
+import { SITE_ORIGIN, SUPABASE_AUTH_ISSUER } from "./constants.ts";
 
 export function robotsTxt(): string {
   return [

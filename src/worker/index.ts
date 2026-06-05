@@ -1,10 +1,10 @@
-import type { PublicShare, RiskReason, ShareRecord } from "../shared/types";
+import type { PublicShare, RiskReason, ShareRecord } from "../shared/types.ts";
 import {
   buildAuthEmailPlan,
   parseSupabaseSendEmailPayload,
   verifyStandardWebhookSignature
-} from "./auth-email";
-import { DISCOVERY_LINKS, LLMS_TXT, SHARE_HTML_SKILL, SITE_ORIGIN } from "./constants";
+} from "./auth-email.ts";
+import { DISCOVERY_LINKS, LLMS_TXT, SHARE_HTML_SKILL, SITE_ORIGIN } from "./constants.ts";
 import {
   a2aAgentCard,
   agentSkillsIndex,
@@ -18,7 +18,7 @@ import {
   securityTxt,
   sitemapXml,
   webMcpManifest
-} from "./discovery";
+} from "./discovery.ts";
 
 type Env = {
   ASSETS: Fetcher;
@@ -45,7 +45,7 @@ type AuthUser = {
   banned_at: string | null;
 };
 
-type ScanResult = {
+export type ScanResult = {
   score: number;
   status: "clean" | "suspicious" | "blocked";
   lifecycle: "active" | "needs_review" | "blocked";
@@ -720,7 +720,7 @@ async function previewShare(request: Request, env: Env, ctx: ExecutionContext): 
   });
 }
 
-function scanHtml(html: string): ScanResult {
+export function scanHtml(html: string): ScanResult {
   const reasons: RiskReason[] = [];
   const urls = Array.from(html.matchAll(/https?:\/\/[^\s"'<>`)]+/gi)).map((match) => match[0]);
   const lower = html.toLowerCase();
@@ -820,7 +820,7 @@ async function createUniqueSlug(env: Env): Promise<string> {
   return `${randomSlug(10)}${Date.now().toString(36)}`;
 }
 
-function randomSlug(length: number): string {
+export function randomSlug(length: number): string {
   const bytes = new Uint8Array(length);
   crypto.getRandomValues(bytes);
   return Array.from(bytes, (byte) => SLUG_ALPHABET[byte % SLUG_ALPHABET.length]).join("");
@@ -950,24 +950,24 @@ function previewMessage(message: string, status: number, request: Request, env: 
   });
 }
 
-function cleanTitle(value: FormDataEntryValue | null, html: string): string {
+export function cleanTitle(value: FormDataEntryValue | null, html: string): string {
   const explicit = sanitizeShortText(typeof value === "string" ? value : "", 120);
   if (explicit) return explicit;
   const match = html.match(/<title[^>]*>([^<]+)<\/title>/i);
   return sanitizeShortText(match?.[1] ?? "Untitled HTML", 120) || "Untitled HTML";
 }
 
-function sanitizeShortText(value: unknown, maxLength: number): string {
+export function sanitizeShortText(value: unknown, maxLength: number): string {
   if (typeof value !== "string") return "";
   return value.replace(/\s+/g, " ").trim().slice(0, maxLength);
 }
 
-function looksLikeHtml(html: string): boolean {
+export function looksLikeHtml(html: string): boolean {
   const sample = html.slice(0, 2048).toLowerCase();
   return sample.includes("<!doctype html") || sample.includes("<html") || /<body[\s>]/i.test(sample) || /<script[\s>]/i.test(sample);
 }
 
-function isUploadFile(value: FormDataEntryValue | null): value is File {
+export function isUploadFile(value: FormDataEntryValue | null): value is File {
   return typeof value === "object" && value !== null && "arrayBuffer" in value && "size" in value && "name" in value;
 }
 
@@ -984,7 +984,7 @@ async function hashText(value: string, salt: string): Promise<string> {
   return sha256Hex(`${salt}:${value}`);
 }
 
-function base64Url(bytes: Uint8Array): string {
+export function base64Url(bytes: Uint8Array): string {
   let binary = "";
   for (const byte of bytes) binary += String.fromCharCode(byte);
   return btoa(binary).replaceAll("+", "-").replaceAll("/", "_").replaceAll("=", "");
@@ -1026,19 +1026,19 @@ function requireWorkerDatabaseAccess(env: Env): void {
   }
 }
 
-function numberEnv(value: string | undefined, fallback: number): number {
+export function numberEnv(value: string | undefined, fallback: number): number {
   if (!value) return fallback;
   const parsed = Number(value);
   return Number.isFinite(parsed) ? parsed : fallback;
 }
 
-function formatBytes(value: number): string {
+export function formatBytes(value: number): string {
   if (value >= 1024 * 1024) return `${Math.round(value / 1024 / 1024)} MB`;
   if (value >= 1024) return `${Math.round(value / 1024)} KB`;
   return `${value} bytes`;
 }
 
-function escapeHtml(value: string): string {
+export function escapeHtml(value: string): string {
   return value.replace(/[&<>"']/g, (char) => {
     switch (char) {
       case "&": return "&amp;";
