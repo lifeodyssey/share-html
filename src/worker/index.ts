@@ -820,16 +820,16 @@ export function isUploadFile(value: FormDataEntryValue | null): value is File {
   return typeof value === "object" && value !== null && "arrayBuffer" in value && "size" in value && "name" in value;
 }
 
-function getClientIp(request: Request): string {
+export function getClientIp(request: Request): string {
   return request.headers.get("cf-connecting-ip") ?? request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? "unknown";
 }
 
-async function sha256Hex(value: string): Promise<string> {
+export async function sha256Hex(value: string): Promise<string> {
   const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(value));
   return Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, "0")).join("");
 }
 
-async function hashText(value: string, salt: string): Promise<string> {
+export async function hashText(value: string, salt: string): Promise<string> {
   return sha256Hex(`${salt}:${value}`);
 }
 
@@ -859,10 +859,10 @@ export function escapeHtml(value: string): string {
   });
 }
 
-function errorMessage(error: unknown): string {
+export function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
 }
 
-function logBackgroundError(error: unknown): void {
+export function logBackgroundError(error: unknown): void {
   console.error(JSON.stringify({ event: "background_error", message: errorMessage(error) }));
 }
