@@ -782,22 +782,10 @@ async function createShare(request: Request, env: Env, ctx: ExecutionContext): P
     return json({ error: "This account is not allowed to upload." }, 403);
   }
 
-  const ipHash = await hashText(getClientIp(request), env.IP_HASH_SALT ?? env.WORKER_API_SECRET);
-  const uaHash = await hashText(request.headers.get("user-agent") ?? "unknown", env.IP_HASH_SALT ?? env.WORKER_API_SECRET);
-  const rateLimit = await checkUploadRate(env, user, ipHash);
-  if (!rateLimit.allowed) {
-    return json({ error: rateLimit.reason }, 429);
-  }
-
   const form = await request.formData();
   const file = form.get("file");
   if (!isUploadFile(file)) {
     return json({ error: "Upload a single HTML file." }, 422);
-  }
-
-  const maxBytes = user ? numberEnv(env.MAX_USER_HTML_BYTES, 5 * 1024 * 1024) : numberEnv(env.MAX_ANON_HTML_BYTES, 1024 * 1024);
-  if (file.size <= 0 || file.size > maxBytes) {
-    return json({ error: `HTML must be between 1 byte and ${formatBytes(maxBytes)}.` }, 413);
   }
 
   const filename = file.name.toLowerCase();
@@ -806,8 +794,36 @@ async function createShare(request: Request, env: Env, ctx: ExecutionContext): P
   }
 
   const html = await file.text();
+  const title = typeof form.get("title") === "string" ? (form.get("title") as string) : "";
+
+  const result = await createShareRecord(env, ctx, request, { html, title, user });
+  return json(result.body, result.status);
+}
+
+async function createShareRecord(
+  env: Env,
+  ctx: ExecutionContext,
+  request: Request,
+  opts: { html: string; title: string; user: AuthUser | null }
+): Promise<{ status: number; body: Record<string, unknown> }> {
+  const { html, title, user } = opts;
+
+  const ipHash = await hashText(getClientIp(request), env.IP_HASH_SALT ?? env.WORKER_API_SECRET);
+  const uaHash = await hashText(request.headers.get("user-agent") ?? "unknown", env.IP_HASH_SALT ?? env.WORKER_API_SECRET);
+
+  const rateLimit = await checkUploadRate(env, user, ipHash);
+  if (!rateLimit.allowed) {
+    return { status: 429, body: { error: rateLimit.reason } };
+  }
+
+  const byteLength = new TextEncoder().encode(html).length;
+  const maxBytes = user ? numberEnv(env.MAX_USER_HTML_BYTES, 5 * 1024 * 1024) : numberEnv(env.MAX_ANON_HTML_BYTES, 1024 * 1024);
+  if (byteLength <= 0 || byteLength > maxBytes) {
+    return { status: 413, body: { error: `HTML must be between 1 byte and ${formatBytes(maxBytes)}.` } };
+  }
+
   if (!looksLikeHtml(html)) {
-    return json({ error: "The file does not look like an HTML document." }, 422);
+    return { status: 422, body: { error: "The content does not look like an HTML document." } };
   }
 
   const shareId = crypto.randomUUID();
@@ -818,7 +834,7 @@ async function createShare(request: Request, env: Env, ctx: ExecutionContext): P
   const scan = scanHtml(html);
   const now = new Date();
   const expiresAt = user ? null : new Date(now.getTime() + 365 * 24 * 60 * 60 * 1000).toISOString();
-  const title = cleanTitle(form.get("title"), html);
+  const cleanedTitle = cleanTitle(title, html);
   const r2Prefix = `shares/${shareId}/`;
   const r2Key = `${r2Prefix}index.html`;
 
@@ -826,10 +842,10 @@ async function createShare(request: Request, env: Env, ctx: ExecutionContext): P
     id: shareId,
     slug,
     owner_user_id: user?.id ?? null,
-    title,
+    title: cleanedTitle,
     entry_path: "index.html",
     r2_prefix: r2Prefix,
-    size_bytes: file.size,
+    size_bytes: byteLength,
     content_hash: contentHash,
     lifecycle_status: "uploading",
     moderation_status: "pending",
@@ -852,7 +868,7 @@ async function createShare(request: Request, env: Env, ctx: ExecutionContext): P
       path: "index.html",
       r2_key: r2Key,
       content_type: "text/html; charset=utf-8",
-      size_bytes: file.size,
+      size_bytes: byteLength,
       content_hash: contentHash
     });
 
@@ -863,18 +879,21 @@ async function createShare(request: Request, env: Env, ctx: ExecutionContext): P
 
     ctx.waitUntil(logShareEvent(env, shareId, user?.id ?? null, "created", ipHash, uaHash, { risk_score: scan.score }).catch(logBackgroundError));
 
-    return json({
-      share: toPublicShare(share, request, env),
-      claimToken,
-      message: scan.lifecycle === "blocked" ? "Uploaded, but blocked by automatic risk checks." : "Uploaded."
-    }, scan.lifecycle === "blocked" ? 202 : 201);
+    return {
+      status: scan.lifecycle === "blocked" ? 202 : 201,
+      body: {
+        share: toPublicShare(share, request, env),
+        claimToken,
+        message: scan.lifecycle === "blocked" ? "Uploaded, but blocked by automatic risk checks." : "Uploaded."
+      }
+    };
   } catch (error) {
     await restUpdate(env, "shares", `id=eq.${shareId}`, {
       lifecycle_status: "failed",
       moderation_status: "pending"
     });
     console.error(JSON.stringify({ event: "upload_failed", share_id: shareId, message: errorMessage(error) }));
-    return json({ error: "Upload failed after metadata was created." }, 500);
+    return { status: 500, body: { error: "Upload failed after metadata was created." } };
   }
 }
 
