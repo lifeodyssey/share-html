@@ -10,7 +10,7 @@ import {
   readJson,
   textResponse,
   withDiscoveryHeaders,
-} from "../src/worker/index.ts";
+} from "../src/worker/http.ts";
 
 import { DISCOVERY_LINKS } from "../src/worker/constants.ts";
 
