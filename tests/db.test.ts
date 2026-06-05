@@ -13,7 +13,7 @@ import {
   randomSlug,
   createSecretToken,
   requireWorkerDatabaseAccess,
-} from "../src/worker/index.ts";
+} from "../src/worker/db.ts";
 
 // ---------------------------------------------------------------------------
 // Helpers
