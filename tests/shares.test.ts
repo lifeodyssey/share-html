@@ -15,7 +15,7 @@ import {
   listReports,
   moderateShare,
   previewShare,
-} from "../src/worker/index.ts";
+} from "../src/worker/shares.ts";
 
 // ---------------------------------------------------------------------------
 // Helpers
