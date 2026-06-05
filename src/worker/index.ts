@@ -756,7 +756,7 @@ async function getUserFromToken(token: string, env: Env): Promise<AuthUser> {
   };
 }
 
-async function createUniqueSlug(env: Env): Promise<string> {
+export async function createUniqueSlug(env: Env): Promise<string> {
   for (let attempt = 0; attempt < 6; attempt += 1) {
     const slug = randomSlug(10);
     const existing = await restSelect<{ id: string }>(env, `shares?select=id&slug=eq.${slug}&limit=1`);
@@ -771,18 +771,18 @@ export function randomSlug(length: number): string {
   return Array.from(bytes, (byte) => SLUG_ALPHABET[byte % SLUG_ALPHABET.length]).join("");
 }
 
-function createSecretToken(): string {
+export function createSecretToken(): string {
   const bytes = new Uint8Array(24);
   crypto.getRandomValues(bytes);
   return base64Url(bytes);
 }
 
-async function getShareBySlug(env: Env, slug: string): Promise<ShareRecord | null> {
+export async function getShareBySlug(env: Env, slug: string): Promise<ShareRecord | null> {
   const [share] = await restSelect<ShareRecord>(env, `shares?select=*&slug=eq.${encodeURIComponent(slug)}&limit=1`);
   return share ?? null;
 }
 
-async function logShareEvent(
+export async function logShareEvent(
   env: Env,
   shareId: string,
   actorUserId: string | null,
@@ -801,11 +801,11 @@ async function logShareEvent(
   });
 }
 
-async function restSelect<T>(env: Env, path: string): Promise<T[]> {
+export async function restSelect<T>(env: Env, path: string): Promise<T[]> {
   return restRequest<T[]>(env, path, { method: "GET" });
 }
 
-async function restInsert<T>(env: Env, table: string, row: Record<string, unknown>): Promise<T> {
+export async function restInsert<T>(env: Env, table: string, row: Record<string, unknown>): Promise<T> {
   const rows = await restRequest<T[]>(env, `${table}?select=*`, {
     method: "POST",
     headers: { prefer: "return=representation" },
@@ -814,7 +814,7 @@ async function restInsert<T>(env: Env, table: string, row: Record<string, unknow
   return rows[0];
 }
 
-async function restUpdate<T>(env: Env, table: string, filter: string, patch: Record<string, unknown>): Promise<T[]> {
+export async function restUpdate<T>(env: Env, table: string, filter: string, patch: Record<string, unknown>): Promise<T[]> {
   return restRequest<T[]>(env, `${table}?${filter}&select=*`, {
     method: "PATCH",
     headers: { prefer: "return=representation" },
@@ -822,7 +822,7 @@ async function restUpdate<T>(env: Env, table: string, filter: string, patch: Rec
   });
 }
 
-async function restRequest<T>(env: Env, path: string, init: RequestInit = {}): Promise<T> {
+export async function restRequest<T>(env: Env, path: string, init: RequestInit = {}): Promise<T> {
   requireWorkerDatabaseAccess(env);
   const headers = new Headers(init.headers);
   headers.set("apikey", env.SUPABASE_REST_KEY);
@@ -844,7 +844,7 @@ async function restRequest<T>(env: Env, path: string, init: RequestInit = {}): P
   return response.json<T>();
 }
 
-function toPublicShare(share: ShareRecord, request: Request, env: Env): PublicShare {
+export function toPublicShare(share: ShareRecord, request: Request, env: Env): PublicShare {
   const requestOrigin = new URL(request.url).origin;
   const appOrigin = env.APP_ORIGIN || requestOrigin;
   const previewOrigin = env.PREVIEW_ORIGIN || requestOrigin;
@@ -936,7 +936,7 @@ export function base64Url(bytes: Uint8Array): string {
 }
 
 
-function requireWorkerDatabaseAccess(env: Env): void {
+export function requireWorkerDatabaseAccess(env: Env): void {
   if (!env.SUPABASE_REST_KEY || !env.WORKER_API_SECRET) {
     throw new Error("SUPABASE_REST_KEY and WORKER_API_SECRET must be configured.");
   }
