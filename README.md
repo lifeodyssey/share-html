@@ -35,7 +35,7 @@
 
 Share HTML is a small Cloudflare-hosted tool for sharing self-contained HTML files. It is useful for quick prototypes, mockups, receipts, tiny demos, and one-off pages that need a URL without setting up a site.
 
-- Anonymous upload flow with a 7-day expiry.
+- Anonymous upload flow with a 365-day expiry.
 - Supabase magic-link sign-in for keeping and deleting shares, with auth email delivery handled by Cloudflare Email Service.
 - Claim token flow for attaching an anonymous upload to an account later.
 - Public share page with status, risk score, and embedded preview.
@@ -50,6 +50,16 @@ Share HTML intentionally exposes two different URLs after upload:
 - **Share URL** opens the public wrapper page at `/s/:slug`. This is the best link to send to someone because it includes the title, status, safety context, report action, and embedded preview.
 - **Preview URL** opens the sandboxed HTML render at `/v/:slug/`. This is useful when you only want to inspect the uploaded page itself.
 - **Claim token** is private. Use it with the share ID after signing in if you want to move an anonymous upload into your account.
+
+## Agent Access
+
+Share HTML is built to be discoverable and usable by AI agents, not just humans:
+
+- **`llms.txt`** — AI-readable site guide (also served from `/` when the request sends `Accept: text/markdown`).
+- **`openapi.json`** — full API description; the homepage HTML also embeds static content + JSON-LD so non-JS agents can read what the site is and how to call it.
+- **`/mcp`** — MCP (JSON-RPC) endpoint exposing `describe_share_html`, `get_public_share`, and `create_share`. The page exposes the same tools in-browser via WebMCP (`navigator.modelContext`).
+- **`create_share`** lets an agent upload an HTML document and get a shareable URL. It runs through the **same anonymous rate limit and risk scanner** as the web upload — there is no bypass path.
+- **Discovery files**: `robots.txt` (with explicit AI-bot rules), `sitemap.xml`, `auth.md`, and `/.well-known/` resources (`api-catalog`, `mcp/server-card.json`, `webmcp.json`, `agent-skills`, `agent-card.json`, OAuth/OIDC metadata, `security.txt`). Unknown `/.well-known/` paths return `404` rather than the SPA shell.
 
 ## Stack
 
