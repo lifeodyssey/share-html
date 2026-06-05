@@ -173,7 +173,7 @@ function UploadPanel({ session, onOpenShare }: { session: Session | null; onOpen
   };
 
   return (
-    <form className="upload-panel" onSubmit={submit}>
+    <form className="upload-panel" onSubmit={submit} aria-label="Upload an HTML file to share">
       <label className="field">
         <span>Title</span>
         <input value={title} onChange={(event) => setTitle(event.target.value)} placeholder="Tiny demo, receipt, prototype..." />
@@ -183,6 +183,7 @@ function UploadPanel({ session, onOpenShare }: { session: Session | null; onOpen
         <input
           type="file"
           accept=".html,.htm,text/html"
+          aria-label="Choose an HTML file"
           onChange={(event) => setFile(event.target.files?.[0] ?? null)}
         />
         <span className="dropzone-main">{file ? file.name : "Choose index.html"}</span>

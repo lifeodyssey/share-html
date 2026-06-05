@@ -135,7 +135,7 @@ export default {
     }
 
     if (url.pathname === "/mcp") {
-      return await handleMcpRequest(request, env);
+      return await handleMcpRequest(request, env, ctx);
     }
 
     if (url.pathname === "/" && acceptsMarkdown(request)) {
@@ -260,6 +260,18 @@ function discoveryRoute(request: Request, url: URL): Response | null {
 
   if (url.pathname === "/.well-known/security.txt") {
     return textResponse(securityTxt(), "text/plain; charset=utf-8", request.method);
+  }
+
+  if (url.pathname === "/.well-known/auth.md" || url.pathname === "/auth.md") {
+    return textResponse(authMarkdown(), "text/markdown; charset=utf-8", request.method);
+  }
+
+  if (url.pathname === "/.well-known/agent-card.json" || url.pathname === "/.well-known/agent.json") {
+    return jsonResponse(a2aAgentCard(), "application/json; charset=utf-8", request.method);
+  }
+
+  if (url.pathname.startsWith("/.well-known/")) {
+    return new Response("Not found", { status: 404, headers: { "content-type": "text/plain; charset=utf-8" } });
   }
 
   return null;
@@ -455,6 +467,22 @@ function mcpServerCard() {
   };
 }
 
+function a2aAgentCard() {
+  return {
+    name: "Share HTML",
+    description: "Upload one HTML file and get a public sandboxed shareable preview link.",
+    url: SITE_ORIGIN,
+    version: "1.0.0",
+    capabilities: { streaming: false },
+    defaultInputModes: ["text"],
+    defaultOutputModes: ["text"],
+    skills: [
+      { id: "create_share", name: "Create share", description: "Upload an HTML document and return a public shareable URL.", tags: ["html", "hosting", "share"] },
+      { id: "get_public_share", name: "Get public share", description: "Fetch public metadata for a Share HTML slug.", tags: ["metadata"] }
+    ]
+  };
+}
+
 function agentSkillsIndex() {
   return {
     $schema: "https://schemas.agentskills.io/discovery/0.2.0/schema.json",
@@ -469,7 +497,7 @@ function agentSkillsIndex() {
   };
 }
 
-async function handleMcpRequest(request: Request, env: Env): Promise<Response> {
+async function handleMcpRequest(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
   if (request.method === "GET" || request.method === "HEAD") {
     return withDiscoveryHeaders(jsonResponse(mcpServerCard(), "application/json; charset=utf-8", request.method));
   }
@@ -486,14 +514,14 @@ async function handleMcpRequest(request: Request, env: Env): Promise<Response> {
   }
 
   if (Array.isArray(payload)) {
-    const responses = (await Promise.all(payload.map((message) => handleMcpMessage(message, request, env)))).filter(Boolean);
+    const responses = (await Promise.all(payload.map((message) => handleMcpMessage(message, request, env, ctx)))).filter(Boolean);
     return mcpJson(responses);
   }
 
-  return mcpJson(await handleMcpMessage(payload, request, env));
+  return mcpJson(await handleMcpMessage(payload, request, env, ctx));
 }
 
-async function handleMcpMessage(message: unknown, request: Request, env: Env): Promise<Record<string, unknown> | null> {
+async function handleMcpMessage(message: unknown, request: Request, env: Env, ctx: ExecutionContext): Promise<Record<string, unknown> | null> {
   if (!isJsonRpcRequest(message)) {
     return { id: null, error: { code: -32600, message: "Invalid Request" } };
   }
@@ -511,7 +539,7 @@ async function handleMcpMessage(message: unknown, request: Request, env: Env): P
       case "tools/list":
         return mcpResult(message.id, { tools: mcpTools() });
       case "tools/call":
-        return await handleMcpToolCall(message.id, message.params, request, env);
+        return await handleMcpToolCall(message.id, message.params, request, env, ctx);
       default:
         return { jsonrpc: "2.0", id: message.id, error: { code: -32601, message: "Method not found" } };
     }
@@ -547,6 +575,19 @@ function mcpTools() {
         additionalProperties: false
       }
     }
+    ,{
+      name: "create_share",
+      description: "Publish/host/share a single HTML page. Uploads an HTML document and returns a public sandboxed shareable URL. Use when the user wants to share, host, or get a link for an HTML file or page.",
+      inputSchema: {
+        type: "object",
+        properties: {
+          html: { type: "string", description: "The full HTML document to publish." },
+          title: { type: "string", description: "Optional title for the share." }
+        },
+        required: ["html"],
+        additionalProperties: false
+      }
+    }
   ];
 }
 
@@ -554,7 +595,8 @@ async function handleMcpToolCall(
   id: unknown,
   params: unknown,
   request: Request,
-  env: Env
+  env: Env,
+  ctx: ExecutionContext
 ): Promise<Record<string, unknown>> {
   const call = params as { name?: string; arguments?: Record<string, unknown> } | null;
 
@@ -580,6 +622,19 @@ async function handleMcpToolCall(
           text: JSON.stringify(toPublicShare(share, request, env), null, 2)
         }
       ]
+    });
+  }
+
+  if (call?.name === "create_share") {
+    const html = typeof call.arguments?.html === "string" ? call.arguments.html : "";
+    if (!html) {
+      return mcpResult(id, { isError: true, content: [{ type: "text", text: "Missing required 'html'." }] });
+    }
+    const title = typeof call.arguments?.title === "string" ? call.arguments.title : "";
+    const result = await createShareRecord(env, ctx, request, { html, title, user: null });
+    return mcpResult(id, {
+      isError: result.status >= 400,
+      content: [{ type: "text", text: JSON.stringify(result.body, null, 2) }]
     });
   }
 
@@ -725,6 +780,27 @@ function securityTxt(): string {
   ].join("\n");
 }
 
+function authMarkdown(): string {
+  return [
+    "# Authentication — Share HTML",
+    "",
+    "## Anonymous (no auth)",
+    "- `POST /api/shares` accepts uploads with no authentication.",
+    "- Anonymous uploads are rate-limited and kept for 365 days.",
+    "",
+    "## Signed-in (Supabase)",
+    "- Sign-in uses Supabase email OTP (magic link).",
+    "- Authenticated API calls send `Authorization: Bearer <supabase_access_token>`.",
+    "",
+    "## Protected endpoints (require Bearer token)",
+    "- `GET /api/shares` — list your shares",
+    "- `DELETE /api/shares/{id}` — delete a share",
+    "- `POST /api/shares/{id}/claim` — claim an anonymous upload",
+    "",
+    `Discovery: ${SITE_ORIGIN}/.well-known/oauth-protected-resource`
+  ].join("\n");
+}
+
 async function createShare(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
   requireWorkerDatabaseAccess(env);
 
@@ -733,22 +809,10 @@ async function createShare(request: Request, env: Env, ctx: ExecutionContext): P
     return json({ error: "This account is not allowed to upload." }, 403);
   }
 
-  const ipHash = await hashText(getClientIp(request), env.IP_HASH_SALT ?? env.WORKER_API_SECRET);
-  const uaHash = await hashText(request.headers.get("user-agent") ?? "unknown", env.IP_HASH_SALT ?? env.WORKER_API_SECRET);
-  const rateLimit = await checkUploadRate(env, user, ipHash);
-  if (!rateLimit.allowed) {
-    return json({ error: rateLimit.reason }, 429);
-  }
-
   const form = await request.formData();
   const file = form.get("file");
   if (!isUploadFile(file)) {
     return json({ error: "Upload a single HTML file." }, 422);
-  }
-
-  const maxBytes = user ? numberEnv(env.MAX_USER_HTML_BYTES, 5 * 1024 * 1024) : numberEnv(env.MAX_ANON_HTML_BYTES, 1024 * 1024);
-  if (file.size <= 0 || file.size > maxBytes) {
-    return json({ error: `HTML must be between 1 byte and ${formatBytes(maxBytes)}.` }, 413);
   }
 
   const filename = file.name.toLowerCase();
@@ -757,8 +821,36 @@ async function createShare(request: Request, env: Env, ctx: ExecutionContext): P
   }
 
   const html = await file.text();
+  const title = typeof form.get("title") === "string" ? (form.get("title") as string) : "";
+
+  const result = await createShareRecord(env, ctx, request, { html, title, user });
+  return json(result.body, result.status);
+}
+
+async function createShareRecord(
+  env: Env,
+  ctx: ExecutionContext,
+  request: Request,
+  opts: { html: string; title: string; user: AuthUser | null }
+): Promise<{ status: number; body: Record<string, unknown> }> {
+  const { html, title, user } = opts;
+
+  const ipHash = await hashText(getClientIp(request), env.IP_HASH_SALT ?? env.WORKER_API_SECRET);
+  const uaHash = await hashText(request.headers.get("user-agent") ?? "unknown", env.IP_HASH_SALT ?? env.WORKER_API_SECRET);
+
+  const rateLimit = await checkUploadRate(env, user, ipHash);
+  if (!rateLimit.allowed) {
+    return { status: 429, body: { error: rateLimit.reason } };
+  }
+
+  const byteLength = new TextEncoder().encode(html).length;
+  const maxBytes = user ? numberEnv(env.MAX_USER_HTML_BYTES, 5 * 1024 * 1024) : numberEnv(env.MAX_ANON_HTML_BYTES, 1024 * 1024);
+  if (byteLength <= 0 || byteLength > maxBytes) {
+    return { status: 413, body: { error: `HTML must be between 1 byte and ${formatBytes(maxBytes)}.` } };
+  }
+
   if (!looksLikeHtml(html)) {
-    return json({ error: "The file does not look like an HTML document." }, 422);
+    return { status: 422, body: { error: "The content does not look like an HTML document." } };
   }
 
   const shareId = crypto.randomUUID();
@@ -769,7 +861,7 @@ async function createShare(request: Request, env: Env, ctx: ExecutionContext): P
   const scan = scanHtml(html);
   const now = new Date();
   const expiresAt = user ? null : new Date(now.getTime() + 365 * 24 * 60 * 60 * 1000).toISOString();
-  const title = cleanTitle(form.get("title"), html);
+  const cleanedTitle = cleanTitle(title, html);
   const r2Prefix = `shares/${shareId}/`;
   const r2Key = `${r2Prefix}index.html`;
 
@@ -777,10 +869,10 @@ async function createShare(request: Request, env: Env, ctx: ExecutionContext): P
     id: shareId,
     slug,
     owner_user_id: user?.id ?? null,
-    title,
+    title: cleanedTitle,
     entry_path: "index.html",
     r2_prefix: r2Prefix,
-    size_bytes: file.size,
+    size_bytes: byteLength,
     content_hash: contentHash,
     lifecycle_status: "uploading",
     moderation_status: "pending",
@@ -803,7 +895,7 @@ async function createShare(request: Request, env: Env, ctx: ExecutionContext): P
       path: "index.html",
       r2_key: r2Key,
       content_type: "text/html; charset=utf-8",
-      size_bytes: file.size,
+      size_bytes: byteLength,
       content_hash: contentHash
     });
 
@@ -814,18 +906,21 @@ async function createShare(request: Request, env: Env, ctx: ExecutionContext): P
 
     ctx.waitUntil(logShareEvent(env, shareId, user?.id ?? null, "created", ipHash, uaHash, { risk_score: scan.score }).catch(logBackgroundError));
 
-    return json({
-      share: toPublicShare(share, request, env),
-      claimToken,
-      message: scan.lifecycle === "blocked" ? "Uploaded, but blocked by automatic risk checks." : "Uploaded."
-    }, scan.lifecycle === "blocked" ? 202 : 201);
+    return {
+      status: scan.lifecycle === "blocked" ? 202 : 201,
+      body: {
+        share: toPublicShare(share, request, env),
+        claimToken,
+        message: scan.lifecycle === "blocked" ? "Uploaded, but blocked by automatic risk checks." : "Uploaded."
+      }
+    };
   } catch (error) {
     await restUpdate(env, "shares", `id=eq.${shareId}`, {
       lifecycle_status: "failed",
       moderation_status: "pending"
     });
     console.error(JSON.stringify({ event: "upload_failed", share_id: shareId, message: errorMessage(error) }));
-    return json({ error: "Upload failed after metadata was created." }, 500);
+    return { status: 500, body: { error: "Upload failed after metadata was created." } };
   }
 }
 

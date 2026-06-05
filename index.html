@@ -14,10 +14,32 @@
     <meta property="og:title" content="Share HTML" />
     <meta property="og:description" content="Upload one HTML file and share it as a sandboxed live preview." />
     <meta name="twitter:card" content="summary" />
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "WebApplication",
+      "name": "Share HTML",
+      "url": "https://sharehtml.zhenjia.dev",
+      "applicationCategory": "DeveloperApplication",
+      "operatingSystem": "Web",
+      "offers": { "@type": "Offer", "price": "0", "priceCurrency": "USD" },
+      "description": "Upload one HTML file and share it as a sandboxed live preview.",
+      "potentialAction": { "@type": "CreateAction", "target": "https://sharehtml.zhenjia.dev/api/shares" }
+    }
+    </script>
     <title>Share HTML</title>
   </head>
   <body>
-    <div id="root"></div>
+    <div id="root">
+      <main>
+        <h1>Share HTML — upload one HTML file, get a sandboxed shareable link</h1>
+        <p>Upload a single self-contained HTML file and get a public, sandboxed preview URL. No signup required; anonymous uploads are kept for 365 days.</p>
+        <h2>Use it programmatically</h2>
+        <pre>curl -X POST https://sharehtml.zhenjia.dev/api/shares -F "file=@page.html" -F "title=My page"
+# returns JSON: { "share": { "share_url", "preview_url", "slug", "id" }, "claimToken" }</pre>
+        <p>Full API: <a href="/openapi.json">/openapi.json</a> · AI guide: <a href="/llms.txt">/llms.txt</a> · MCP: <a href="/mcp">/mcp</a></p>
+      </main>
+    </div>
     <script>
       (() => {
         const provideShareHtmlContext = () => {
@@ -73,6 +95,33 @@
                         text: await response.text()
                       }
                     ],
+                    isError: !response.ok
+                  };
+                }
+              }
+              ,{
+                name: "create_share",
+                description: "Publish/host/share a single HTML page. Returns a public sandboxed shareable URL.",
+                inputSchema: {
+                  type: "object",
+                  properties: {
+                    html: { type: "string", description: "The full HTML document to publish." },
+                    title: { type: "string", description: "Optional title." }
+                  },
+                  required: ["html"],
+                  additionalProperties: false
+                },
+                execute: async (args) => {
+                  const html = args && args.html;
+                  if (typeof html !== "string" || !html) {
+                    return { content: [{ type: "text", text: "Missing required html." }], isError: true };
+                  }
+                  const body = new FormData();
+                  body.set("file", new Blob([html], { type: "text/html" }), "index.html");
+                  if (args.title) body.set("title", String(args.title));
+                  const response = await fetch("/api/shares", { method: "POST", body });
+                  return {
+                    content: [{ type: "text", text: await response.text() }],
                     isError: !response.ok
                   };
                 }
