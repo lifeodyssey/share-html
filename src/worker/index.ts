@@ -262,6 +262,18 @@ function discoveryRoute(request: Request, url: URL): Response | null {
     return textResponse(securityTxt(), "text/plain; charset=utf-8", request.method);
   }
 
+  if (url.pathname === "/.well-known/auth.md" || url.pathname === "/auth.md") {
+    return textResponse(authMarkdown(), "text/markdown; charset=utf-8", request.method);
+  }
+
+  if (url.pathname === "/.well-known/agent-card.json" || url.pathname === "/.well-known/agent.json") {
+    return jsonResponse(a2aAgentCard(), "application/json; charset=utf-8", request.method);
+  }
+
+  if (url.pathname.startsWith("/.well-known/")) {
+    return new Response("Not found", { status: 404, headers: { "content-type": "text/plain; charset=utf-8" } });
+  }
+
   return null;
 }
 
@@ -452,6 +464,22 @@ function mcpServerCard() {
     capabilities: {
       tools: true
     }
+  };
+}
+
+function a2aAgentCard() {
+  return {
+    name: "Share HTML",
+    description: "Upload one HTML file and get a public sandboxed shareable preview link.",
+    url: SITE_ORIGIN,
+    version: "1.0.0",
+    capabilities: { streaming: false },
+    defaultInputModes: ["text"],
+    defaultOutputModes: ["text"],
+    skills: [
+      { id: "create_share", name: "Create share", description: "Upload an HTML document and return a public shareable URL.", tags: ["html", "hosting", "share"] },
+      { id: "get_public_share", name: "Get public share", description: "Fetch public metadata for a Share HTML slug.", tags: ["metadata"] }
+    ]
   };
 }
 
@@ -722,6 +750,27 @@ function securityTxt(): string {
     "Preferred-Languages: en, zh, ja",
     `Canonical: ${SITE_ORIGIN}/.well-known/security.txt`,
     ""
+  ].join("\n");
+}
+
+function authMarkdown(): string {
+  return [
+    "# Authentication — Share HTML",
+    "",
+    "## Anonymous (no auth)",
+    "- `POST /api/shares` accepts uploads with no authentication.",
+    "- Anonymous uploads are rate-limited and kept for 365 days.",
+    "",
+    "## Signed-in (Supabase)",
+    "- Sign-in uses Supabase email OTP (magic link).",
+    "- Authenticated API calls send `Authorization: Bearer <supabase_access_token>`.",
+    "",
+    "## Protected endpoints (require Bearer token)",
+    "- `GET /api/shares` — list your shares",
+    "- `DELETE /api/shares/{id}` — delete a share",
+    "- `POST /api/shares/{id}/claim` — claim an anonymous upload",
+    "",
+    `Discovery: ${SITE_ORIGIN}/.well-known/oauth-protected-resource`
   ].join("\n");
 }
 
