@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { scanHtml } from "../src/worker/index.ts";
+import { scanHtml } from "../src/worker/scan.ts";
 
 // Clean HTML — no risk signals at all.
 test("scanHtml: clean simple HTML doc has status=clean, lifecycle=active, score=0", () => {
