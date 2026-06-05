@@ -135,7 +135,7 @@ export default {
     }
 
     if (url.pathname === "/mcp") {
-      return await handleMcpRequest(request, env);
+      return await handleMcpRequest(request, env, ctx);
     }
 
     if (url.pathname === "/" && acceptsMarkdown(request)) {
@@ -497,7 +497,7 @@ function agentSkillsIndex() {
   };
 }
 
-async function handleMcpRequest(request: Request, env: Env): Promise<Response> {
+async function handleMcpRequest(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
   if (request.method === "GET" || request.method === "HEAD") {
     return withDiscoveryHeaders(jsonResponse(mcpServerCard(), "application/json; charset=utf-8", request.method));
   }
@@ -514,14 +514,14 @@ async function handleMcpRequest(request: Request, env: Env): Promise<Response> {
   }
 
   if (Array.isArray(payload)) {
-    const responses = (await Promise.all(payload.map((message) => handleMcpMessage(message, request, env)))).filter(Boolean);
+    const responses = (await Promise.all(payload.map((message) => handleMcpMessage(message, request, env, ctx)))).filter(Boolean);
     return mcpJson(responses);
   }
 
-  return mcpJson(await handleMcpMessage(payload, request, env));
+  return mcpJson(await handleMcpMessage(payload, request, env, ctx));
 }
 
-async function handleMcpMessage(message: unknown, request: Request, env: Env): Promise<Record<string, unknown> | null> {
+async function handleMcpMessage(message: unknown, request: Request, env: Env, ctx: ExecutionContext): Promise<Record<string, unknown> | null> {
   if (!isJsonRpcRequest(message)) {
     return { id: null, error: { code: -32600, message: "Invalid Request" } };
   }
@@ -539,7 +539,7 @@ async function handleMcpMessage(message: unknown, request: Request, env: Env): P
       case "tools/list":
         return mcpResult(message.id, { tools: mcpTools() });
       case "tools/call":
-        return await handleMcpToolCall(message.id, message.params, request, env);
+        return await handleMcpToolCall(message.id, message.params, request, env, ctx);
       default:
         return { jsonrpc: "2.0", id: message.id, error: { code: -32601, message: "Method not found" } };
     }
@@ -575,6 +575,19 @@ function mcpTools() {
         additionalProperties: false
       }
     }
+    ,{
+      name: "create_share",
+      description: "Publish/host/share a single HTML page. Uploads an HTML document and returns a public sandboxed shareable URL. Use when the user wants to share, host, or get a link for an HTML file or page.",
+      inputSchema: {
+        type: "object",
+        properties: {
+          html: { type: "string", description: "The full HTML document to publish." },
+          title: { type: "string", description: "Optional title for the share." }
+        },
+        required: ["html"],
+        additionalProperties: false
+      }
+    }
   ];
 }
 
@@ -582,7 +595,8 @@ async function handleMcpToolCall(
   id: unknown,
   params: unknown,
   request: Request,
-  env: Env
+  env: Env,
+  ctx: ExecutionContext
 ): Promise<Record<string, unknown>> {
   const call = params as { name?: string; arguments?: Record<string, unknown> } | null;
 
@@ -608,6 +622,19 @@ async function handleMcpToolCall(
           text: JSON.stringify(toPublicShare(share, request, env), null, 2)
         }
       ]
+    });
+  }
+
+  if (call?.name === "create_share") {
+    const html = typeof call.arguments?.html === "string" ? call.arguments.html : "";
+    if (!html) {
+      return mcpResult(id, { isError: true, content: [{ type: "text", text: "Missing required 'html'." }] });
+    }
+    const title = typeof call.arguments?.title === "string" ? call.arguments.title : "";
+    const result = await createShareRecord(env, ctx, request, { html, title, user: null });
+    return mcpResult(id, {
+      isError: result.status >= 400,
+      content: [{ type: "text", text: JSON.stringify(result.body, null, 2) }]
     });
   }
 
