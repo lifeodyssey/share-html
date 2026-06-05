@@ -1,4 +1,5 @@
 import type { PublicShare, ShareRecord } from "../shared/types.ts";
+import { appOrigin, previewOrigin } from "./config.ts";
 
 // Minimal structural interface covering the env fields used by these helpers.
 // The full Env type in index.ts is a superset that satisfies this interface.
@@ -321,8 +322,8 @@ export async function createUniqueSlug(env: DbEnv): Promise<string> {
 
 export function toPublicShare(share: ShareRecord, request: Request, env: DbEnv): PublicShare {
   const requestOrigin = new URL(request.url).origin;
-  const appOrigin = env.APP_ORIGIN || requestOrigin;
-  const previewOrigin = env.PREVIEW_ORIGIN || requestOrigin;
+  const resolvedAppOrigin = appOrigin(env, requestOrigin);
+  const resolvedPreviewOrigin = previewOrigin(env, requestOrigin);
   return {
     id: share.id,
     slug: share.slug,
@@ -331,8 +332,8 @@ export function toPublicShare(share: ShareRecord, request: Request, env: DbEnv):
     moderation_status: share.moderation_status,
     risk_score: share.risk_score,
     risk_reasons: share.risk_reasons,
-    share_url: `${appOrigin}/s/${share.slug}`,
-    preview_url: `${previewOrigin}/v/${share.slug}/`,
+    share_url: `${resolvedAppOrigin}/s/${share.slug}`,
+    preview_url: `${resolvedPreviewOrigin}/v/${share.slug}/`,
     expires_at: share.expires_at,
     created_at: share.created_at,
     size_bytes: share.size_bytes,

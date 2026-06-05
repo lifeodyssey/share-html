@@ -282,5 +282,6 @@ export { countRecentUploadsByIp, countRecentUploadsByUser, insertShare, insertSh
 export { getUserFromToken, getOptionalUser, requireUser, requireAdmin } from "./auth.ts";
 export type { AuthUser } from "./auth.ts";
 export { cleanTitle, sanitizeShortText, looksLikeHtml, isUploadFile, getClientIp, sha256Hex, hashText, base64Url, numberEnv, formatBytes, escapeHtml, errorMessage, logBackgroundError } from "./utils.ts";
+export { maxUploadBytes, appOrigin, previewOrigin } from "./config.ts";
 export { createShare, createShareRecord, checkUploadRate, listMyShares, getPublicShare, reportShare, claimShare, deleteShare, listReports, moderateShare, previewShare, previewHeaders, previewMessage } from "./shares.ts";
 

@@ -9,10 +9,10 @@ import {
   isUploadFile,
   logBackgroundError,
   looksLikeHtml,
-  numberEnv,
   sanitizeShortText,
   sha256Hex,
 } from "./utils.ts";
+import { appOrigin, maxUploadBytes } from "./config.ts";
 import {
   claimShareRow,
   countRecentUploadsByIp,
@@ -107,7 +107,7 @@ export async function createShareRecord(
   }
 
   const byteLength = new TextEncoder().encode(html).length;
-  const maxBytes = user ? numberEnv(env.MAX_USER_HTML_BYTES, 5 * 1024 * 1024) : numberEnv(env.MAX_ANON_HTML_BYTES, 1024 * 1024);
+  const maxBytes = maxUploadBytes(env, user !== null);
   if (byteLength <= 0 || byteLength > maxBytes) {
     return { status: 413, body: { error: `HTML must be between 1 byte and ${formatBytes(maxBytes)}.` } };
   }
@@ -333,7 +333,7 @@ export async function previewShare(request: Request, env: Env, ctx: ExecutionCon
 
 export function previewHeaders(request: Request, env: Env, extra: HeadersInit = {}): Headers {
   const headers = new Headers(extra);
-  const appOrigin = env.APP_ORIGIN || new URL(request.url).origin;
+  const origin = appOrigin(env, new URL(request.url).origin);
   headers.set("x-content-type-options", "nosniff");
   headers.set("referrer-policy", "no-referrer");
   headers.set("permissions-policy", "camera=(), microphone=(), geolocation=(), payment=()");
@@ -346,7 +346,7 @@ export function previewHeaders(request: Request, env: Env, extra: HeadersInit = 
       "style-src 'unsafe-inline' https:",
       "img-src https: data: blob:",
       "connect-src https:",
-      `frame-ancestors 'self' ${appOrigin}`,
+      `frame-ancestors 'self' ${origin}`,
       "base-uri 'none'"
     ].join("; ")
   );
