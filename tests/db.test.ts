@@ -2,10 +2,6 @@ import assert from "node:assert/strict";
 import { test, afterEach, vi } from "vitest";
 
 import {
-  restRequest,
-  restSelect,
-  restInsert,
-  restUpdate,
   getShareBySlug,
   logShareEvent,
   createUniqueSlug,
@@ -13,6 +9,21 @@ import {
   randomSlug,
   createSecretToken,
   requireWorkerDatabaseAccess,
+  // Intent functions
+  countRecentUploadsByIp,
+  countRecentUploadsByUser,
+  insertShare,
+  insertShareAsset,
+  updateShareScanResult,
+  findUserShares,
+  insertReport,
+  getOpenReports,
+  findClaimableShare,
+  claimShareRow,
+  softDeleteShare,
+  setShareModeration,
+  getUserProfile,
+  insertUserProfile,
 } from "../src/worker/db.ts";
 
 // ---------------------------------------------------------------------------
@@ -27,6 +38,13 @@ function makeEnv(overrides: Record<string, unknown> = {}) {
     SUPABASE_PUBLISHABLE_KEY: "pub-key",
     ...overrides,
   } as any;
+}
+
+function supabaseOk(rows: unknown = []) {
+  return new Response(JSON.stringify(rows), {
+    status: 200,
+    headers: { "content-type": "application/json" },
+  });
 }
 
 afterEach(() => {
@@ -59,378 +77,6 @@ test("requireWorkerDatabaseAccess: does not throw when both secrets are present"
 });
 
 // ---------------------------------------------------------------------------
-// restRequest
-// ---------------------------------------------------------------------------
-
-test("restRequest: builds correct URL from SUPABASE_URL and path", async () => {
-  let capturedUrl: string | undefined;
-  vi.stubGlobal("fetch", async (url: unknown, _init: unknown) => {
-    capturedUrl = String(url);
-    return new Response(JSON.stringify([]), {
-      status: 200,
-      headers: { "content-type": "application/json" },
-    });
-  });
-
-  const env = makeEnv();
-  await restRequest(env, "shares?select=*", { method: "GET" });
-
-  assert.equal(capturedUrl, "https://proj.supabase.co/rest/v1/shares?select=*");
-});
-
-test("restRequest: sets apikey header to SUPABASE_REST_KEY", async () => {
-  let capturedHeaders: Headers | undefined;
-  vi.stubGlobal("fetch", async (_url: unknown, init: RequestInit) => {
-    capturedHeaders = init.headers as Headers;
-    return new Response(JSON.stringify([]), {
-      status: 200,
-      headers: { "content-type": "application/json" },
-    });
-  });
-
-  const env = makeEnv();
-  await restRequest(env, "shares?select=*", { method: "GET" });
-
-  assert.equal(capturedHeaders!.get("apikey"), "anon-key");
-});
-
-test("restRequest: sets authorization header to Bearer SUPABASE_REST_KEY", async () => {
-  let capturedHeaders: Headers | undefined;
-  vi.stubGlobal("fetch", async (_url: unknown, init: RequestInit) => {
-    capturedHeaders = init.headers as Headers;
-    return new Response(JSON.stringify([]), {
-      status: 200,
-      headers: { "content-type": "application/json" },
-    });
-  });
-
-  const env = makeEnv();
-  await restRequest(env, "shares?select=*", { method: "GET" });
-
-  assert.equal(capturedHeaders!.get("authorization"), "Bearer anon-key");
-});
-
-test("restRequest: sets x-worker-secret header to WORKER_API_SECRET", async () => {
-  let capturedHeaders: Headers | undefined;
-  vi.stubGlobal("fetch", async (_url: unknown, init: RequestInit) => {
-    capturedHeaders = init.headers as Headers;
-    return new Response(JSON.stringify([]), {
-      status: 200,
-      headers: { "content-type": "application/json" },
-    });
-  });
-
-  const env = makeEnv();
-  await restRequest(env, "shares?select=*", { method: "GET" });
-
-  assert.equal(capturedHeaders!.get("x-worker-secret"), "worker-secret");
-});
-
-test("restRequest: does NOT set content-type when no body is present", async () => {
-  let capturedHeaders: Headers | undefined;
-  vi.stubGlobal("fetch", async (_url: unknown, init: RequestInit) => {
-    capturedHeaders = init.headers as Headers;
-    return new Response(JSON.stringify([]), {
-      status: 200,
-      headers: { "content-type": "application/json" },
-    });
-  });
-
-  const env = makeEnv();
-  await restRequest(env, "shares?select=*", { method: "GET" });
-
-  assert.equal(capturedHeaders!.get("content-type"), null);
-});
-
-test("restRequest: sets content-type to application/json when body is present", async () => {
-  let capturedHeaders: Headers | undefined;
-  vi.stubGlobal("fetch", async (_url: unknown, init: RequestInit) => {
-    capturedHeaders = init.headers as Headers;
-    return new Response(JSON.stringify([{ id: "x" }]), {
-      status: 200,
-      headers: { "content-type": "application/json" },
-    });
-  });
-
-  const env = makeEnv();
-  await restRequest(env, "shares?select=*", {
-    method: "POST",
-    body: JSON.stringify({ foo: "bar" }),
-  });
-
-  assert.equal(capturedHeaders!.get("content-type"), "application/json");
-});
-
-test("restRequest: returns parsed JSON from response", async () => {
-  vi.stubGlobal("fetch", async () => {
-    return new Response(JSON.stringify([{ id: "abc" }]), {
-      status: 200,
-      headers: { "content-type": "application/json" },
-    });
-  });
-
-  const env = makeEnv();
-  const result = await restRequest<{ id: string }[]>(env, "shares?select=*", { method: "GET" });
-
-  assert.deepEqual(result, [{ id: "abc" }]);
-});
-
-test("restRequest: returns undefined for 204 No Content", async () => {
-  vi.stubGlobal("fetch", async () => {
-    return new Response(null, { status: 204 });
-  });
-
-  const env = makeEnv();
-  const result = await restRequest(env, "shares?select=*", { method: "GET" });
-
-  assert.equal(result, undefined);
-});
-
-test("restRequest: throws on non-ok response, message includes status and body text", async () => {
-  vi.stubGlobal("fetch", async () => {
-    return new Response("row not found", { status: 404 });
-  });
-
-  const env = makeEnv();
-  await assert.rejects(
-    restRequest(env, "shares?select=*", { method: "GET" }),
-    (err: Error) => {
-      return err.message.includes("404") && err.message.includes("row not found");
-    }
-  );
-});
-
-test("restRequest: throws when env secrets are missing", async () => {
-  const env = makeEnv({ SUPABASE_REST_KEY: "" });
-  await assert.rejects(restRequest(env, "shares", { method: "GET" }), /SUPABASE_REST_KEY/);
-});
-
-// ---------------------------------------------------------------------------
-// restSelect
-// ---------------------------------------------------------------------------
-
-test("restSelect: issues GET request", async () => {
-  let capturedMethod: string | undefined;
-  vi.stubGlobal("fetch", async (_url: unknown, init: RequestInit) => {
-    capturedMethod = init.method as string;
-    return new Response(JSON.stringify([{ id: "1" }]), {
-      status: 200,
-      headers: { "content-type": "application/json" },
-    });
-  });
-
-  const env = makeEnv();
-  await restSelect(env, "shares?select=*");
-
-  assert.equal(capturedMethod, "GET");
-});
-
-test("restSelect: passes path verbatim to fetch URL", async () => {
-  let capturedUrl: string | undefined;
-  vi.stubGlobal("fetch", async (url: unknown) => {
-    capturedUrl = String(url);
-    return new Response(JSON.stringify([]), {
-      status: 200,
-      headers: { "content-type": "application/json" },
-    });
-  });
-
-  const env = makeEnv();
-  await restSelect(env, "shares?select=*&slug=eq.abc&limit=1");
-
-  assert.equal(
-    capturedUrl,
-    "https://proj.supabase.co/rest/v1/shares?select=*&slug=eq.abc&limit=1"
-  );
-});
-
-test("restSelect: returns array of parsed rows", async () => {
-  vi.stubGlobal("fetch", async () => {
-    return new Response(JSON.stringify([{ id: "x" }, { id: "y" }]), {
-      status: 200,
-      headers: { "content-type": "application/json" },
-    });
-  });
-
-  const env = makeEnv();
-  const rows = await restSelect<{ id: string }>(env, "shares?select=*");
-
-  assert.deepEqual(rows, [{ id: "x" }, { id: "y" }]);
-});
-
-// ---------------------------------------------------------------------------
-// restInsert
-// ---------------------------------------------------------------------------
-
-test("restInsert: issues POST request", async () => {
-  let capturedMethod: string | undefined;
-  vi.stubGlobal("fetch", async (_url: unknown, init: RequestInit) => {
-    capturedMethod = init.method as string;
-    return new Response(JSON.stringify([{ id: "new" }]), {
-      status: 200,
-      headers: { "content-type": "application/json" },
-    });
-  });
-
-  const env = makeEnv();
-  await restInsert(env, "shares", { id: "new", slug: "abc" });
-
-  assert.equal(capturedMethod, "POST");
-});
-
-test("restInsert: appends ?select=* to table path", async () => {
-  let capturedUrl: string | undefined;
-  vi.stubGlobal("fetch", async (url: unknown) => {
-    capturedUrl = String(url);
-    return new Response(JSON.stringify([{ id: "1" }]), {
-      status: 200,
-      headers: { "content-type": "application/json" },
-    });
-  });
-
-  const env = makeEnv();
-  await restInsert(env, "shares", { id: "1" });
-
-  assert.equal(capturedUrl, "https://proj.supabase.co/rest/v1/shares?select=*");
-});
-
-test("restInsert: sends prefer: return=representation header", async () => {
-  let capturedHeaders: Headers | undefined;
-  vi.stubGlobal("fetch", async (_url: unknown, init: RequestInit) => {
-    capturedHeaders = init.headers as Headers;
-    return new Response(JSON.stringify([{ id: "1" }]), {
-      status: 200,
-      headers: { "content-type": "application/json" },
-    });
-  });
-
-  const env = makeEnv();
-  await restInsert(env, "shares", { id: "1" });
-
-  assert.equal(capturedHeaders!.get("prefer"), "return=representation");
-});
-
-test("restInsert: sends row as JSON body", async () => {
-  let capturedBody: string | undefined;
-  vi.stubGlobal("fetch", async (_url: unknown, init: RequestInit) => {
-    capturedBody = init.body as string;
-    return new Response(JSON.stringify([{ id: "1", slug: "xyz" }]), {
-      status: 200,
-      headers: { "content-type": "application/json" },
-    });
-  });
-
-  const env = makeEnv();
-  await restInsert(env, "shares", { id: "1", slug: "xyz" });
-
-  assert.deepEqual(JSON.parse(capturedBody!), { id: "1", slug: "xyz" });
-});
-
-test("restInsert: returns first element of the array", async () => {
-  vi.stubGlobal("fetch", async () => {
-    return new Response(JSON.stringify([{ id: "first" }, { id: "second" }]), {
-      status: 200,
-      headers: { "content-type": "application/json" },
-    });
-  });
-
-  const env = makeEnv();
-  const result = await restInsert<{ id: string }>(env, "shares", { id: "first" });
-
-  assert.deepEqual(result, { id: "first" });
-});
-
-// ---------------------------------------------------------------------------
-// restUpdate
-// ---------------------------------------------------------------------------
-
-test("restUpdate: issues PATCH request", async () => {
-  let capturedMethod: string | undefined;
-  vi.stubGlobal("fetch", async (_url: unknown, init: RequestInit) => {
-    capturedMethod = init.method as string;
-    return new Response(JSON.stringify([{ id: "1" }]), {
-      status: 200,
-      headers: { "content-type": "application/json" },
-    });
-  });
-
-  const env = makeEnv();
-  await restUpdate(env, "shares", "id=eq.1", { lifecycle_status: "active" });
-
-  assert.equal(capturedMethod, "PATCH");
-});
-
-test("restUpdate: builds URL as table?filter&select=*", async () => {
-  let capturedUrl: string | undefined;
-  vi.stubGlobal("fetch", async (url: unknown) => {
-    capturedUrl = String(url);
-    return new Response(JSON.stringify([{ id: "1" }]), {
-      status: 200,
-      headers: { "content-type": "application/json" },
-    });
-  });
-
-  const env = makeEnv();
-  await restUpdate(env, "shares", "id=eq.abc", { lifecycle_status: "active" });
-
-  assert.equal(
-    capturedUrl,
-    "https://proj.supabase.co/rest/v1/shares?id=eq.abc&select=*"
-  );
-});
-
-test("restUpdate: sends prefer: return=representation header", async () => {
-  let capturedHeaders: Headers | undefined;
-  vi.stubGlobal("fetch", async (_url: unknown, init: RequestInit) => {
-    capturedHeaders = init.headers as Headers;
-    return new Response(JSON.stringify([{ id: "1" }]), {
-      status: 200,
-      headers: { "content-type": "application/json" },
-    });
-  });
-
-  const env = makeEnv();
-  await restUpdate(env, "shares", "id=eq.1", { lifecycle_status: "active" });
-
-  assert.equal(capturedHeaders!.get("prefer"), "return=representation");
-});
-
-test("restUpdate: sends patch as JSON body", async () => {
-  let capturedBody: string | undefined;
-  vi.stubGlobal("fetch", async (_url: unknown, init: RequestInit) => {
-    capturedBody = init.body as string;
-    return new Response(JSON.stringify([{ id: "1" }]), {
-      status: 200,
-      headers: { "content-type": "application/json" },
-    });
-  });
-
-  const env = makeEnv();
-  await restUpdate(env, "shares", "id=eq.1", { lifecycle_status: "active" });
-
-  assert.deepEqual(JSON.parse(capturedBody!), { lifecycle_status: "active" });
-});
-
-test("restUpdate: returns array of updated rows", async () => {
-  vi.stubGlobal("fetch", async () => {
-    return new Response(JSON.stringify([{ id: "1", lifecycle_status: "active" }]), {
-      status: 200,
-      headers: { "content-type": "application/json" },
-    });
-  });
-
-  const env = makeEnv();
-  const rows = await restUpdate<{ id: string; lifecycle_status: string }>(
-    env,
-    "shares",
-    "id=eq.1",
-    { lifecycle_status: "active" }
-  );
-
-  assert.deepEqual(rows, [{ id: "1", lifecycle_status: "active" }]);
-});
-
-// ---------------------------------------------------------------------------
 // getShareBySlug
 // ---------------------------------------------------------------------------
 
@@ -438,10 +84,7 @@ test("getShareBySlug: requests shares?select=*&slug=eq.<slug>&limit=1", async ()
   let capturedUrl: string | undefined;
   vi.stubGlobal("fetch", async (url: unknown) => {
     capturedUrl = String(url);
-    return new Response(JSON.stringify([{ id: "s1", slug: "abc" }]), {
-      status: 200,
-      headers: { "content-type": "application/json" },
-    });
+    return supabaseOk([{ id: "s1", slug: "abc" }]);
   });
 
   const env = makeEnv();
@@ -455,12 +98,7 @@ test("getShareBySlug: requests shares?select=*&slug=eq.<slug>&limit=1", async ()
 
 test("getShareBySlug: returns the first row when found", async () => {
   const fakeShare = { id: "s1", slug: "abc", title: "Test" };
-  vi.stubGlobal("fetch", async () => {
-    return new Response(JSON.stringify([fakeShare]), {
-      status: 200,
-      headers: { "content-type": "application/json" },
-    });
-  });
+  vi.stubGlobal("fetch", async () => supabaseOk([fakeShare]));
 
   const env = makeEnv();
   const result = await getShareBySlug(env, "abc");
@@ -469,12 +107,7 @@ test("getShareBySlug: returns the first row when found", async () => {
 });
 
 test("getShareBySlug: returns null when no rows returned", async () => {
-  vi.stubGlobal("fetch", async () => {
-    return new Response(JSON.stringify([]), {
-      status: 200,
-      headers: { "content-type": "application/json" },
-    });
-  });
+  vi.stubGlobal("fetch", async () => supabaseOk([]));
 
   const env = makeEnv();
   const result = await getShareBySlug(env, "notfound");
@@ -486,10 +119,7 @@ test("getShareBySlug: URL-encodes the slug", async () => {
   let capturedUrl: string | undefined;
   vi.stubGlobal("fetch", async (url: unknown) => {
     capturedUrl = String(url);
-    return new Response(JSON.stringify([]), {
-      status: 200,
-      headers: { "content-type": "application/json" },
-    });
+    return supabaseOk([]);
   });
 
   const env = makeEnv();
@@ -507,10 +137,7 @@ test("logShareEvent: inserts into share_events table", async () => {
   let capturedUrl: string | undefined;
   vi.stubGlobal("fetch", async (url: unknown) => {
     capturedUrl = String(url);
-    return new Response(JSON.stringify([{}]), {
-      status: 200,
-      headers: { "content-type": "application/json" },
-    });
+    return supabaseOk([{}]);
   });
 
   const env = makeEnv();
@@ -523,10 +150,7 @@ test("logShareEvent: sends correct fields in body", async () => {
   let capturedBody: Record<string, unknown> | undefined;
   vi.stubGlobal("fetch", async (_url: unknown, init: RequestInit) => {
     capturedBody = JSON.parse(init.body as string);
-    return new Response(JSON.stringify([{}]), {
-      status: 200,
-      headers: { "content-type": "application/json" },
-    });
+    return supabaseOk([{}]);
   });
 
   const env = makeEnv();
@@ -544,10 +168,7 @@ test("logShareEvent: accepts null actor, ip, and uaHash", async () => {
   let capturedBody: Record<string, unknown> | undefined;
   vi.stubGlobal("fetch", async (_url: unknown, init: RequestInit) => {
     capturedBody = JSON.parse(init.body as string);
-    return new Response(JSON.stringify([{}]), {
-      status: 200,
-      headers: { "content-type": "application/json" },
-    });
+    return supabaseOk([{}]);
   });
 
   const env = makeEnv();
@@ -681,8 +302,6 @@ test("toPublicShare: risk_score and risk_reasons are passed through", () => {
 // randomSlug
 // ---------------------------------------------------------------------------
 
-// SLUG_ALPHABET is the character set actually used (read from source):
-// "23456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz"
 const EXPECTED_ALPHABET = "23456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz";
 
 test("randomSlug: returns string of requested length", () => {
@@ -707,7 +326,6 @@ test("randomSlug: all characters are from SLUG_ALPHABET", () => {
 
 test("randomSlug: returns different values on repeated calls (probabilistic)", () => {
   const slugs = new Set(Array.from({ length: 10 }, () => randomSlug(10)));
-  // extremely unlikely to collide — chance is negligible for length 10 alphabet^10
   assert.ok(slugs.size > 1, "expected multiple distinct slugs");
 });
 
@@ -721,7 +339,6 @@ test("createSecretToken: returns a string", () => {
 });
 
 test("createSecretToken: token length is 32 characters (24 bytes base64url-encoded without padding)", () => {
-  // 24 bytes → base64 = 32 chars (24 * 4/3 = 32, no padding since 24 % 3 === 0)
   const token = createSecretToken();
   assert.equal(token.length, 32);
 });
@@ -743,13 +360,7 @@ test("createSecretToken: returns different values on repeated calls (probabilist
 // ---------------------------------------------------------------------------
 
 test("createUniqueSlug: returns a string", async () => {
-  // First call: existing=[], meaning slug is unique
-  vi.stubGlobal("fetch", async () => {
-    return new Response(JSON.stringify([]), {
-      status: 200,
-      headers: { "content-type": "application/json" },
-    });
-  });
+  vi.stubGlobal("fetch", async () => supabaseOk([]));
 
   const env = makeEnv();
   const slug = await createUniqueSlug(env);
@@ -757,12 +368,7 @@ test("createUniqueSlug: returns a string", async () => {
 });
 
 test("createUniqueSlug: returns a slug of length 10 when first attempt is unique", async () => {
-  vi.stubGlobal("fetch", async () => {
-    return new Response(JSON.stringify([]), {
-      status: 200,
-      headers: { "content-type": "application/json" },
-    });
-  });
+  vi.stubGlobal("fetch", async () => supabaseOk([]));
 
   const env = makeEnv();
   const slug = await createUniqueSlug(env);
@@ -773,12 +379,8 @@ test("createUniqueSlug: retries until a unique slug is found", async () => {
   let callCount = 0;
   vi.stubGlobal("fetch", async () => {
     callCount++;
-    // First 3 calls return a collision, 4th returns empty (unique)
     const rows = callCount < 4 ? [{ id: "existing" }] : [];
-    return new Response(JSON.stringify(rows), {
-      status: 200,
-      headers: { "content-type": "application/json" },
-    });
+    return supabaseOk(rows);
   });
 
   const env = makeEnv();
@@ -789,17 +391,622 @@ test("createUniqueSlug: retries until a unique slug is found", async () => {
 });
 
 test("createUniqueSlug: appends Date.now base36 when all 6 attempts collide", async () => {
-  // All fetches return a row (collision)
-  vi.stubGlobal("fetch", async () => {
-    return new Response(JSON.stringify([{ id: "existing" }]), {
-      status: 200,
-      headers: { "content-type": "application/json" },
-    });
-  });
+  vi.stubGlobal("fetch", async () => supabaseOk([{ id: "existing" }]));
 
   const env = makeEnv();
   const slug = await createUniqueSlug(env);
-  // After 6 collisions, returns randomSlug(10) + Date.now().toString(36)
-  // So length is > 10
   assert.ok(slug.length > 10, `expected length > 10, got ${slug.length}`);
+});
+
+// ---------------------------------------------------------------------------
+// countRecentUploadsByIp
+// ---------------------------------------------------------------------------
+
+test("countRecentUploadsByIp: issues GET request to shares with correct filter params", async () => {
+  let capturedUrl: string | undefined;
+  vi.stubGlobal("fetch", async (url: unknown) => {
+    capturedUrl = String(url);
+    return supabaseOk([]);
+  });
+
+  const env = makeEnv();
+  await countRecentUploadsByIp(env, "ip-hash-abc", "2024-01-01T00:00:00.000Z", 10);
+
+  assert.ok(capturedUrl!.includes("creator_ip_hash=eq.ip-hash-abc"), `URL: ${capturedUrl}`);
+  assert.ok(capturedUrl!.includes("created_at=gte."), `URL: ${capturedUrl}`);
+  assert.ok(capturedUrl!.includes("limit=11"), `URL: ${capturedUrl}`);
+  assert.ok(capturedUrl!.includes("shares?select=id"), `URL: ${capturedUrl}`);
+});
+
+test("countRecentUploadsByIp: returns the row count from the response", async () => {
+  vi.stubGlobal("fetch", async () => supabaseOk([{ id: "a" }, { id: "b" }, { id: "c" }]));
+
+  const env = makeEnv();
+  const count = await countRecentUploadsByIp(env, "hash", "2024-01-01T00:00:00.000Z", 10);
+  assert.equal(count, 3);
+});
+
+test("countRecentUploadsByIp: URL-encodes ipHash and sinceIso", async () => {
+  let capturedUrl: string | undefined;
+  vi.stubGlobal("fetch", async (url: unknown) => {
+    capturedUrl = String(url);
+    return supabaseOk([]);
+  });
+
+  const env = makeEnv();
+  await countRecentUploadsByIp(env, "hash with space", "2024-01-01T00:00:00.000Z", 5);
+
+  assert.ok(capturedUrl!.includes("creator_ip_hash=eq.hash%20with%20space"), `URL: ${capturedUrl}`);
+});
+
+test("countRecentUploadsByIp: cap is reflected as limit=cap+1 in the URL", async () => {
+  let capturedUrl: string | undefined;
+  vi.stubGlobal("fetch", async (url: unknown) => {
+    capturedUrl = String(url);
+    return supabaseOk([]);
+  });
+
+  const env = makeEnv();
+  await countRecentUploadsByIp(env, "hash", "2024-01-01T00:00:00.000Z", 5);
+
+  assert.ok(capturedUrl!.includes("limit=6"), `URL: ${capturedUrl}`);
+});
+
+// ---------------------------------------------------------------------------
+// countRecentUploadsByUser
+// ---------------------------------------------------------------------------
+
+test("countRecentUploadsByUser: issues GET request to shares with correct user filter", async () => {
+  let capturedUrl: string | undefined;
+  vi.stubGlobal("fetch", async (url: unknown) => {
+    capturedUrl = String(url);
+    return supabaseOk([]);
+  });
+
+  const env = makeEnv();
+  await countRecentUploadsByUser(env, "user-xyz", "2024-01-01T00:00:00.000Z", 100);
+
+  assert.ok(capturedUrl!.includes("owner_user_id=eq.user-xyz"), `URL: ${capturedUrl}`);
+  assert.ok(capturedUrl!.includes("created_at=gte."), `URL: ${capturedUrl}`);
+  assert.ok(capturedUrl!.includes("limit=101"), `URL: ${capturedUrl}`);
+  assert.ok(capturedUrl!.includes("shares?select=id"), `URL: ${capturedUrl}`);
+});
+
+test("countRecentUploadsByUser: returns the row count from the response", async () => {
+  vi.stubGlobal("fetch", async () => supabaseOk(new Array(50).fill({ id: "x" })));
+
+  const env = makeEnv();
+  const count = await countRecentUploadsByUser(env, "user-1", "2024-01-01T00:00:00.000Z", 100);
+  assert.equal(count, 50);
+});
+
+test("countRecentUploadsByUser: cap is reflected as limit=cap+1 in the URL", async () => {
+  let capturedUrl: string | undefined;
+  vi.stubGlobal("fetch", async (url: unknown) => {
+    capturedUrl = String(url);
+    return supabaseOk([]);
+  });
+
+  const env = makeEnv();
+  await countRecentUploadsByUser(env, "user-1", "2024-01-01T00:00:00.000Z", 7);
+
+  assert.ok(capturedUrl!.includes("limit=8"), `URL: ${capturedUrl}`);
+});
+
+// ---------------------------------------------------------------------------
+// insertShare
+// ---------------------------------------------------------------------------
+
+test("insertShare: POSTs to shares?select=*", async () => {
+  let capturedUrl: string | undefined;
+  let capturedMethod: string | undefined;
+  vi.stubGlobal("fetch", async (url: unknown, init: RequestInit) => {
+    capturedUrl = String(url);
+    capturedMethod = init.method;
+    return supabaseOk([{ id: "new-share" }]);
+  });
+
+  const env = makeEnv();
+  await insertShare(env, { id: "new-share", slug: "abc123" });
+
+  assert.equal(capturedMethod, "POST");
+  assert.ok(capturedUrl!.includes("/rest/v1/shares?select=*"), `URL: ${capturedUrl}`);
+});
+
+test("insertShare: sends the fields as JSON body", async () => {
+  let capturedBody: Record<string, unknown> | undefined;
+  vi.stubGlobal("fetch", async (_url: unknown, init: RequestInit) => {
+    capturedBody = JSON.parse(init.body as string);
+    return supabaseOk([{ id: "s1" }]);
+  });
+
+  const env = makeEnv();
+  await insertShare(env, { id: "s1", slug: "xyz", lifecycle_status: "uploading" });
+
+  assert.equal(capturedBody!.id, "s1");
+  assert.equal(capturedBody!.slug, "xyz");
+  assert.equal(capturedBody!.lifecycle_status, "uploading");
+});
+
+test("insertShare: returns the inserted share row", async () => {
+  const shareRow = { id: "s1", slug: "abc", lifecycle_status: "uploading" };
+  vi.stubGlobal("fetch", async () => supabaseOk([shareRow]));
+
+  const env = makeEnv();
+  const result = await insertShare(env, { id: "s1" });
+
+  assert.deepEqual(result, shareRow);
+});
+
+// ---------------------------------------------------------------------------
+// insertShareAsset
+// ---------------------------------------------------------------------------
+
+test("insertShareAsset: POSTs to share_assets", async () => {
+  let capturedUrl: string | undefined;
+  vi.stubGlobal("fetch", async (url: unknown) => {
+    capturedUrl = String(url);
+    return supabaseOk([{ id: "asset-1" }]);
+  });
+
+  const env = makeEnv();
+  await insertShareAsset(env, { share_id: "s1", path: "index.html" });
+
+  assert.ok(capturedUrl!.includes("/rest/v1/share_assets"), `URL: ${capturedUrl}`);
+});
+
+test("insertShareAsset: sends the fields as JSON body", async () => {
+  let capturedBody: Record<string, unknown> | undefined;
+  vi.stubGlobal("fetch", async (_url: unknown, init: RequestInit) => {
+    capturedBody = JSON.parse(init.body as string);
+    return supabaseOk([{}]);
+  });
+
+  const env = makeEnv();
+  await insertShareAsset(env, { share_id: "s1", path: "index.html", r2_key: "shares/s1/index.html" });
+
+  assert.equal(capturedBody!.share_id, "s1");
+  assert.equal(capturedBody!.path, "index.html");
+});
+
+// ---------------------------------------------------------------------------
+// updateShareScanResult
+// ---------------------------------------------------------------------------
+
+test("updateShareScanResult: PATCHes shares with id=eq.<shareId> filter", async () => {
+  let capturedUrl: string | undefined;
+  let capturedMethod: string | undefined;
+  vi.stubGlobal("fetch", async (url: unknown, init: RequestInit) => {
+    capturedUrl = String(url);
+    capturedMethod = init.method;
+    return supabaseOk([{ id: "s1" }]);
+  });
+
+  const env = makeEnv();
+  await updateShareScanResult(env, "s1", { lifecycle_status: "active" });
+
+  assert.equal(capturedMethod, "PATCH");
+  assert.ok(capturedUrl!.includes("id=eq.s1"), `URL: ${capturedUrl}`);
+  assert.ok(capturedUrl!.includes("shares?"), `URL: ${capturedUrl}`);
+});
+
+test("updateShareScanResult: sends patch fields as JSON body", async () => {
+  let capturedBody: Record<string, unknown> | undefined;
+  vi.stubGlobal("fetch", async (_url: unknown, init: RequestInit) => {
+    capturedBody = JSON.parse(init.body as string);
+    return supabaseOk([{}]);
+  });
+
+  const env = makeEnv();
+  await updateShareScanResult(env, "s1", { lifecycle_status: "blocked", moderation_status: "blocked" });
+
+  assert.equal(capturedBody!.lifecycle_status, "blocked");
+  assert.equal(capturedBody!.moderation_status, "blocked");
+});
+
+test("updateShareScanResult: returns array of updated rows", async () => {
+  const row = { id: "s1", lifecycle_status: "active" };
+  vi.stubGlobal("fetch", async () => supabaseOk([row]));
+
+  const env = makeEnv();
+  const rows = await updateShareScanResult(env, "s1", { lifecycle_status: "active" });
+
+  assert.deepEqual(rows, [row]);
+});
+
+// ---------------------------------------------------------------------------
+// findUserShares
+// ---------------------------------------------------------------------------
+
+test("findUserShares: GETs shares with owner_user_id filter and deleted_at=is.null", async () => {
+  let capturedUrl: string | undefined;
+  vi.stubGlobal("fetch", async (url: unknown) => {
+    capturedUrl = String(url);
+    return supabaseOk([]);
+  });
+
+  const env = makeEnv();
+  await findUserShares(env, "user-abc");
+
+  assert.ok(capturedUrl!.includes("owner_user_id=eq.user-abc"), `URL: ${capturedUrl}`);
+  assert.ok(capturedUrl!.includes("deleted_at=is.null"), `URL: ${capturedUrl}`);
+  assert.ok(capturedUrl!.includes("order=created_at.desc"), `URL: ${capturedUrl}`);
+  assert.ok(capturedUrl!.includes("limit=100"), `URL: ${capturedUrl}`);
+});
+
+test("findUserShares: returns share rows", async () => {
+  const rows = [{ id: "s1" }, { id: "s2" }];
+  vi.stubGlobal("fetch", async () => supabaseOk(rows));
+
+  const env = makeEnv();
+  const result = await findUserShares(env, "user-1");
+
+  assert.deepEqual(result, rows);
+});
+
+// ---------------------------------------------------------------------------
+// insertReport
+// ---------------------------------------------------------------------------
+
+test("insertReport: POSTs to reports table", async () => {
+  let capturedUrl: string | undefined;
+  vi.stubGlobal("fetch", async (url: unknown) => {
+    capturedUrl = String(url);
+    return supabaseOk([{ id: "r1" }]);
+  });
+
+  const env = makeEnv();
+  await insertReport(env, { share_id: "s1", reason: "spam" });
+
+  assert.ok(capturedUrl!.includes("/rest/v1/reports"), `URL: ${capturedUrl}`);
+});
+
+test("insertReport: sends fields as JSON body", async () => {
+  let capturedBody: Record<string, unknown> | undefined;
+  vi.stubGlobal("fetch", async (_url: unknown, init: RequestInit) => {
+    capturedBody = JSON.parse(init.body as string);
+    return supabaseOk([{}]);
+  });
+
+  const env = makeEnv();
+  await insertReport(env, { share_id: "s1", reporter_user_id: "u1", reason: "spam", details: "looks bad" });
+
+  assert.equal(capturedBody!.share_id, "s1");
+  assert.equal(capturedBody!.reporter_user_id, "u1");
+  assert.equal(capturedBody!.reason, "spam");
+});
+
+// ---------------------------------------------------------------------------
+// getOpenReports
+// ---------------------------------------------------------------------------
+
+test("getOpenReports: GETs reports with status=eq.open filter", async () => {
+  let capturedUrl: string | undefined;
+  vi.stubGlobal("fetch", async (url: unknown) => {
+    capturedUrl = String(url);
+    return supabaseOk([]);
+  });
+
+  const env = makeEnv();
+  await getOpenReports(env);
+
+  assert.ok(capturedUrl!.includes("status=eq.open"), `URL: ${capturedUrl}`);
+  assert.ok(capturedUrl!.includes("order=created_at.desc"), `URL: ${capturedUrl}`);
+  assert.ok(capturedUrl!.includes("limit=100"), `URL: ${capturedUrl}`);
+});
+
+test("getOpenReports: returns report rows", async () => {
+  const rows = [{ id: "r1", status: "open" }, { id: "r2", status: "open" }];
+  vi.stubGlobal("fetch", async () => supabaseOk(rows));
+
+  const env = makeEnv();
+  const result = await getOpenReports(env);
+
+  assert.deepEqual(result, rows);
+});
+
+// ---------------------------------------------------------------------------
+// findClaimableShare
+// ---------------------------------------------------------------------------
+
+test("findClaimableShare: GETs shares with id, claim_token_hash, and owner_user_id=is.null filters", async () => {
+  let capturedUrl: string | undefined;
+  vi.stubGlobal("fetch", async (url: unknown) => {
+    capturedUrl = String(url);
+    return supabaseOk([]);
+  });
+
+  const env = makeEnv();
+  await findClaimableShare(env, "share-id-1", "token-hash-abc");
+
+  assert.ok(capturedUrl!.includes("id=eq.share-id-1"), `URL: ${capturedUrl}`);
+  assert.ok(capturedUrl!.includes("claim_token_hash=eq."), `URL: ${capturedUrl}`);
+  assert.ok(capturedUrl!.includes("owner_user_id=is.null"), `URL: ${capturedUrl}`);
+  assert.ok(capturedUrl!.includes("limit=1"), `URL: ${capturedUrl}`);
+});
+
+test("findClaimableShare: returns the share when token matches", async () => {
+  const row = { id: "s1", claim_token_hash: "hash123", owner_user_id: null };
+  vi.stubGlobal("fetch", async () => supabaseOk([row]));
+
+  const env = makeEnv();
+  const result = await findClaimableShare(env, "s1", "hash123");
+
+  assert.deepEqual(result, row);
+});
+
+test("findClaimableShare: returns null when no matching share found", async () => {
+  vi.stubGlobal("fetch", async () => supabaseOk([]));
+
+  const env = makeEnv();
+  const result = await findClaimableShare(env, "s1", "wrong-hash");
+
+  assert.equal(result, null);
+});
+
+test("findClaimableShare: URL-encodes the claim token hash", async () => {
+  let capturedUrl: string | undefined;
+  vi.stubGlobal("fetch", async (url: unknown) => {
+    capturedUrl = String(url);
+    return supabaseOk([]);
+  });
+
+  const env = makeEnv();
+  await findClaimableShare(env, "s1", "hash with+special=chars");
+
+  assert.ok(capturedUrl!.includes("claim_token_hash=eq.hash%20with%2Bspecial%3Dchars"), `URL: ${capturedUrl}`);
+});
+
+// ---------------------------------------------------------------------------
+// claimShareRow
+// ---------------------------------------------------------------------------
+
+test("claimShareRow: PATCHes shares with id=eq.<shareId> filter", async () => {
+  let capturedUrl: string | undefined;
+  let capturedMethod: string | undefined;
+  vi.stubGlobal("fetch", async (url: unknown, init: RequestInit) => {
+    capturedUrl = String(url);
+    capturedMethod = init.method;
+    return supabaseOk([{ id: "s1", owner_user_id: "user-1" }]);
+  });
+
+  const env = makeEnv();
+  await claimShareRow(env, "s1", "user-1");
+
+  assert.equal(capturedMethod, "PATCH");
+  assert.ok(capturedUrl!.includes("id=eq.s1"), `URL: ${capturedUrl}`);
+});
+
+test("claimShareRow: sets owner_user_id, clears claim_token_hash and expires_at", async () => {
+  let capturedBody: Record<string, unknown> | undefined;
+  vi.stubGlobal("fetch", async (_url: unknown, init: RequestInit) => {
+    capturedBody = JSON.parse(init.body as string);
+    return supabaseOk([{ id: "s1" }]);
+  });
+
+  const env = makeEnv();
+  await claimShareRow(env, "s1", "user-42");
+
+  assert.equal(capturedBody!.owner_user_id, "user-42");
+  assert.equal(capturedBody!.claim_token_hash, null);
+  assert.equal(capturedBody!.expires_at, null);
+});
+
+test("claimShareRow: returns the updated share row", async () => {
+  const updated = { id: "s1", owner_user_id: "user-1", claim_token_hash: null };
+  vi.stubGlobal("fetch", async () => supabaseOk([updated]));
+
+  const env = makeEnv();
+  const result = await claimShareRow(env, "s1", "user-1");
+
+  assert.deepEqual(result, updated);
+});
+
+test("claimShareRow: returns null when no rows updated", async () => {
+  vi.stubGlobal("fetch", async () => supabaseOk([]));
+
+  const env = makeEnv();
+  const result = await claimShareRow(env, "s1", "user-1");
+
+  assert.equal(result, null);
+});
+
+// ---------------------------------------------------------------------------
+// softDeleteShare
+// ---------------------------------------------------------------------------
+
+test("softDeleteShare: admin delete uses id-only filter (no owner_user_id constraint)", async () => {
+  let capturedUrl: string | undefined;
+  vi.stubGlobal("fetch", async (url: unknown) => {
+    capturedUrl = String(url);
+    return supabaseOk([{ id: "s1" }]);
+  });
+
+  const env = makeEnv();
+  await softDeleteShare(env, "s1", true, "any-user-id");
+
+  assert.ok(capturedUrl!.includes("id=eq.s1"), `URL: ${capturedUrl}`);
+  assert.ok(!capturedUrl!.includes("owner_user_id"), `Admin filter should not include owner_user_id: ${capturedUrl}`);
+});
+
+test("softDeleteShare: non-admin delete includes owner_user_id constraint", async () => {
+  let capturedUrl: string | undefined;
+  vi.stubGlobal("fetch", async (url: unknown) => {
+    capturedUrl = String(url);
+    return supabaseOk([{ id: "s1" }]);
+  });
+
+  const env = makeEnv();
+  await softDeleteShare(env, "s1", false, "owner-456");
+
+  assert.ok(capturedUrl!.includes("id=eq.s1"), `URL: ${capturedUrl}`);
+  assert.ok(capturedUrl!.includes("owner_user_id=eq.owner-456"), `URL: ${capturedUrl}`);
+});
+
+test("softDeleteShare: sets lifecycle_status=deleted and deleted_at in patch body", async () => {
+  let capturedBody: Record<string, unknown> | undefined;
+  vi.stubGlobal("fetch", async (_url: unknown, init: RequestInit) => {
+    capturedBody = JSON.parse(init.body as string);
+    return supabaseOk([{}]);
+  });
+
+  const env = makeEnv();
+  await softDeleteShare(env, "s1", true, "user-1");
+
+  assert.equal(capturedBody!.lifecycle_status, "deleted");
+  assert.ok(typeof capturedBody!.deleted_at === "string", "deleted_at should be an ISO string");
+});
+
+test("softDeleteShare: returns the updated share row", async () => {
+  const row = { id: "s1", lifecycle_status: "deleted" };
+  vi.stubGlobal("fetch", async () => supabaseOk([row]));
+
+  const env = makeEnv();
+  const result = await softDeleteShare(env, "s1", true, "user-1");
+
+  assert.deepEqual(result, row);
+});
+
+test("softDeleteShare: returns null when no rows updated", async () => {
+  vi.stubGlobal("fetch", async () => supabaseOk([]));
+
+  const env = makeEnv();
+  const result = await softDeleteShare(env, "s1", false, "wrong-owner");
+
+  assert.equal(result, null);
+});
+
+// ---------------------------------------------------------------------------
+// setShareModeration
+// ---------------------------------------------------------------------------
+
+test("setShareModeration: PATCHes shares with id=eq.<shareId> filter", async () => {
+  let capturedUrl: string | undefined;
+  vi.stubGlobal("fetch", async (url: unknown) => {
+    capturedUrl = String(url);
+    return supabaseOk([{ id: "s1" }]);
+  });
+
+  const env = makeEnv();
+  await setShareModeration(env, "s1", { lifecycle_status: "blocked" });
+
+  assert.ok(capturedUrl!.includes("id=eq.s1"), `URL: ${capturedUrl}`);
+  assert.ok(capturedUrl!.includes("shares?"), `URL: ${capturedUrl}`);
+});
+
+test("setShareModeration: sends the patch object as JSON body", async () => {
+  let capturedBody: Record<string, unknown> | undefined;
+  vi.stubGlobal("fetch", async (_url: unknown, init: RequestInit) => {
+    capturedBody = JSON.parse(init.body as string);
+    return supabaseOk([{}]);
+  });
+
+  const env = makeEnv();
+  await setShareModeration(env, "s1", {
+    lifecycle_status: "blocked",
+    moderation_status: "blocked"
+  });
+
+  assert.equal(capturedBody!.lifecycle_status, "blocked");
+  assert.equal(capturedBody!.moderation_status, "blocked");
+});
+
+test("setShareModeration: returns the updated share row", async () => {
+  const row = { id: "s1", lifecycle_status: "blocked" };
+  vi.stubGlobal("fetch", async () => supabaseOk([row]));
+
+  const env = makeEnv();
+  const result = await setShareModeration(env, "s1", { lifecycle_status: "blocked" });
+
+  assert.deepEqual(result, row);
+});
+
+test("setShareModeration: returns null when no row found", async () => {
+  vi.stubGlobal("fetch", async () => supabaseOk([]));
+
+  const env = makeEnv();
+  const result = await setShareModeration(env, "missing-id", { lifecycle_status: "blocked" });
+
+  assert.equal(result, null);
+});
+
+// ---------------------------------------------------------------------------
+// getUserProfile
+// ---------------------------------------------------------------------------
+
+test("getUserProfile: GETs profiles with id=eq.<userId> and selects role,banned_at", async () => {
+  let capturedUrl: string | undefined;
+  vi.stubGlobal("fetch", async (url: unknown) => {
+    capturedUrl = String(url);
+    return supabaseOk([{ role: "user", banned_at: null }]);
+  });
+
+  const env = makeEnv();
+  await getUserProfile(env, "user-123");
+
+  assert.ok(capturedUrl!.includes("/rest/v1/profiles"), `URL: ${capturedUrl}`);
+  assert.ok(capturedUrl!.includes("id=eq.user-123"), `URL: ${capturedUrl}`);
+  assert.ok(capturedUrl!.includes("select=role,banned_at"), `URL: ${capturedUrl}`);
+  assert.ok(capturedUrl!.includes("limit=1"), `URL: ${capturedUrl}`);
+});
+
+test("getUserProfile: returns the profile row when found", async () => {
+  const profile = { role: "admin" as const, banned_at: null };
+  vi.stubGlobal("fetch", async () => supabaseOk([profile]));
+
+  const env = makeEnv();
+  const result = await getUserProfile(env, "admin-1");
+
+  assert.deepEqual(result, profile);
+});
+
+test("getUserProfile: returns null when profile not found", async () => {
+  vi.stubGlobal("fetch", async () => supabaseOk([]));
+
+  const env = makeEnv();
+  const result = await getUserProfile(env, "new-user");
+
+  assert.equal(result, null);
+});
+
+test("getUserProfile: returns banned_at when profile has a ban", async () => {
+  vi.stubGlobal("fetch", async () =>
+    supabaseOk([{ role: "user", banned_at: "2025-01-01T00:00:00Z" }])
+  );
+
+  const env = makeEnv();
+  const result = await getUserProfile(env, "banned-user");
+
+  assert.equal(result!.banned_at, "2025-01-01T00:00:00Z");
+});
+
+// ---------------------------------------------------------------------------
+// insertUserProfile
+// ---------------------------------------------------------------------------
+
+test("insertUserProfile: POSTs to profiles table", async () => {
+  let capturedUrl: string | undefined;
+  vi.stubGlobal("fetch", async (url: unknown) => {
+    capturedUrl = String(url);
+    return supabaseOk([{ id: "u1" }]);
+  });
+
+  const env = makeEnv();
+  await insertUserProfile(env, "u1", "alice");
+
+  assert.ok(capturedUrl!.includes("/rest/v1/profiles"), `URL: ${capturedUrl}`);
+});
+
+test("insertUserProfile: sends id and display_name in body", async () => {
+  let capturedBody: Record<string, unknown> | undefined;
+  vi.stubGlobal("fetch", async (_url: unknown, init: RequestInit) => {
+    capturedBody = JSON.parse(init.body as string);
+    return supabaseOk([{}]);
+  });
+
+  const env = makeEnv();
+  await insertUserProfile(env, "u1", "alice");
+
+  assert.equal(capturedBody!.id, "u1");
+  assert.equal(capturedBody!.display_name, "alice");
 });
