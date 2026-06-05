@@ -8,7 +8,23 @@ export default defineConfig({
     emptyOutDir: true
   },
   test: {
-    environment: "node",
-    include: ["tests/**/*.test.ts"]
+    projects: [
+      {
+        plugins: [react()],
+        test: {
+          name: "client",
+          environment: "jsdom",
+          include: ["tests/client/**/*.test.{ts,tsx}"]
+        }
+      },
+      {
+        test: {
+          name: "worker",
+          environment: "node",
+          include: ["tests/**/*.test.ts"],
+          exclude: ["tests/client/**"]
+        }
+      }
+    ]
   }
 });
