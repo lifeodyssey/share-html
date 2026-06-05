@@ -225,7 +225,7 @@ function discoveryRoute(request: Request, url: URL): Response | null {
 }
 
 
-async function handleMcpRequest(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
+export async function handleMcpRequest(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
   if (request.method === "GET" || request.method === "HEAD") {
     return withDiscoveryHeaders(jsonResponse(mcpServerCard(), "application/json; charset=utf-8", request.method));
   }
@@ -249,7 +249,7 @@ async function handleMcpRequest(request: Request, env: Env, ctx: ExecutionContex
   return mcpJson(await handleMcpMessage(payload, request, env, ctx));
 }
 
-async function handleMcpMessage(message: unknown, request: Request, env: Env, ctx: ExecutionContext): Promise<Record<string, unknown> | null> {
+export async function handleMcpMessage(message: unknown, request: Request, env: Env, ctx: ExecutionContext): Promise<Record<string, unknown> | null> {
   if (!isJsonRpcRequest(message)) {
     return { id: null, error: { code: -32600, message: "Invalid Request" } };
   }
@@ -276,15 +276,15 @@ async function handleMcpMessage(message: unknown, request: Request, env: Env, ct
   }
 }
 
-function isJsonRpcRequest(value: unknown): value is { id?: unknown; method: string; params?: unknown } {
+export function isJsonRpcRequest(value: unknown): value is { id?: unknown; method: string; params?: unknown } {
   return typeof value === "object" && value !== null && typeof (value as { method?: unknown }).method === "string";
 }
 
-function mcpResult(id: unknown, result: Record<string, unknown>): Record<string, unknown> {
+export function mcpResult(id: unknown, result: Record<string, unknown>): Record<string, unknown> {
   return { jsonrpc: "2.0", id, result };
 }
 
-function mcpTools() {
+export function mcpTools() {
   return [
     {
       name: "describe_share_html",
@@ -319,7 +319,7 @@ function mcpTools() {
   ];
 }
 
-async function handleMcpToolCall(
+export async function handleMcpToolCall(
   id: unknown,
   params: unknown,
   request: Request,
@@ -369,7 +369,7 @@ async function handleMcpToolCall(
   return mcpResult(id, { isError: true, content: [{ type: "text", text: "Unknown tool." }] });
 }
 
-function mcpJson(body: unknown): Response {
+export function mcpJson(body: unknown): Response {
   return withDiscoveryHeaders(new Response(JSON.stringify(body, null, 2), { headers: JSON_HEADERS }));
 }
 
