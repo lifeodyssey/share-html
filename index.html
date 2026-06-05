@@ -17,7 +17,16 @@
     <title>Share HTML</title>
   </head>
   <body>
-    <div id="root"></div>
+    <div id="root">
+      <main>
+        <h1>Share HTML — upload one HTML file, get a sandboxed shareable link</h1>
+        <p>Upload a single self-contained HTML file and get a public, sandboxed preview URL. No signup required; anonymous uploads are kept for 365 days.</p>
+        <h2>Use it programmatically</h2>
+        <pre>curl -X POST https://sharehtml.zhenjia.dev/api/shares -F "file=@page.html" -F "title=My page"
+# returns JSON: { "share": { "share_url", "preview_url", "slug", "id" }, "claimToken" }</pre>
+        <p>Full API: <a href="/openapi.json">/openapi.json</a> · AI guide: <a href="/llms.txt">/llms.txt</a> · MCP: <a href="/mcp">/mcp</a></p>
+      </main>
+    </div>
     <script>
       (() => {
         const provideShareHtmlContext = () => {
