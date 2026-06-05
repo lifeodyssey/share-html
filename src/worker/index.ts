@@ -726,7 +726,7 @@ async function checkUploadRate(env: Env, user: AuthUser | null, ipHash: string):
   return { allowed: true };
 }
 
-async function getOptionalUser(request: Request, env: Env): Promise<AuthUser | null> {
+export async function getOptionalUser(request: Request, env: Env): Promise<AuthUser | null> {
   const header = request.headers.get("authorization");
   if (!header?.startsWith("Bearer ")) return null;
   try {
@@ -736,7 +736,7 @@ async function getOptionalUser(request: Request, env: Env): Promise<AuthUser | n
   }
 }
 
-async function requireUser(request: Request, env: Env): Promise<AuthUser | Response> {
+export async function requireUser(request: Request, env: Env): Promise<AuthUser | Response> {
   const header = request.headers.get("authorization");
   if (!header?.startsWith("Bearer ")) return json({ error: "Authentication required." }, 401);
   try {
@@ -746,14 +746,14 @@ async function requireUser(request: Request, env: Env): Promise<AuthUser | Respo
   }
 }
 
-async function requireAdmin(request: Request, env: Env): Promise<AuthUser | Response> {
+export async function requireAdmin(request: Request, env: Env): Promise<AuthUser | Response> {
   const user = await requireUser(request, env);
   if (user instanceof Response) return user;
   if (user.role !== "admin") return json({ error: "Admin access required." }, 403);
   return user;
 }
 
-async function getUserFromToken(token: string, env: Env): Promise<AuthUser> {
+export async function getUserFromToken(token: string, env: Env): Promise<AuthUser> {
   requireWorkerDatabaseAccess(env);
   const response = await fetch(`${env.SUPABASE_URL}/auth/v1/user`, {
     headers: {
