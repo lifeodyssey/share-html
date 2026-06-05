@@ -392,7 +392,7 @@ function mcpJson(body: unknown): Response {
   return withDiscoveryHeaders(new Response(JSON.stringify(body, null, 2), { headers: JSON_HEADERS }));
 }
 
-async function createShare(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
+export async function createShare(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
   requireWorkerDatabaseAccess(env);
 
   const user = await getOptionalUser(request, env);
@@ -418,7 +418,7 @@ async function createShare(request: Request, env: Env, ctx: ExecutionContext): P
   return json(result.body, result.status);
 }
 
-async function createShareRecord(
+export async function createShareRecord(
   env: Env,
   ctx: ExecutionContext,
   request: Request,
@@ -576,7 +576,7 @@ async function sendSupabaseAuthEmail(request: Request, env: Env): Promise<Respon
   }
 }
 
-async function listMyShares(request: Request, env: Env): Promise<Response> {
+export async function listMyShares(request: Request, env: Env): Promise<Response> {
   const user = await requireUser(request, env);
   if (user instanceof Response) return user;
 
@@ -588,14 +588,14 @@ async function listMyShares(request: Request, env: Env): Promise<Response> {
   return json({ shares: shares.map((share) => toPublicShare(share, request, env)) });
 }
 
-async function getPublicShare(slug: string, request: Request, env: Env): Promise<Response> {
+export async function getPublicShare(slug: string, request: Request, env: Env): Promise<Response> {
   const share = await getShareBySlug(env, slug);
   if (!share || share.deleted_at) return json({ error: "Share not found" }, 404);
 
   return json({ share: toPublicShare(share, request, env) });
 }
 
-async function reportShare(shareId: string, request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
+export async function reportShare(shareId: string, request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
   const user = await getOptionalUser(request, env);
   const body = await readJson<{ reason?: string; details?: string }>(request);
   const reason = sanitizeShortText(body.reason, 80) || "other";
@@ -614,7 +614,7 @@ async function reportShare(shareId: string, request: Request, env: Env, ctx: Exe
   return json({ ok: true });
 }
 
-async function claimShare(shareId: string, request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
+export async function claimShare(shareId: string, request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
   const user = await requireUser(request, env);
   if (user instanceof Response) return user;
 
@@ -638,7 +638,7 @@ async function claimShare(shareId: string, request: Request, env: Env, ctx: Exec
   return json({ share: toPublicShare(updated, request, env) });
 }
 
-async function deleteShare(shareId: string, request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
+export async function deleteShare(shareId: string, request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
   const user = await requireUser(request, env);
   if (user instanceof Response) return user;
 
@@ -653,7 +653,7 @@ async function deleteShare(shareId: string, request: Request, env: Env, ctx: Exe
   return json({ ok: true });
 }
 
-async function listReports(request: Request, env: Env): Promise<Response> {
+export async function listReports(request: Request, env: Env): Promise<Response> {
   const admin = await requireAdmin(request, env);
   if (admin instanceof Response) return admin;
 
@@ -661,7 +661,7 @@ async function listReports(request: Request, env: Env): Promise<Response> {
   return json({ reports });
 }
 
-async function moderateShare(shareId: string, action: "block" | "unblock", request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
+export async function moderateShare(shareId: string, action: "block" | "unblock", request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
   const admin = await requireAdmin(request, env);
   if (admin instanceof Response) return admin;
 
@@ -676,7 +676,7 @@ async function moderateShare(shareId: string, action: "block" | "unblock", reque
   return json({ share: toPublicShare(share, request, env) });
 }
 
-async function previewShare(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
+export async function previewShare(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
   const url = new URL(request.url);
   const match = url.pathname.match(/^\/v\/([^/]+)\/?(.*)$/);
   if (!match) return previewMessage("Not found", 404, request, env);
@@ -713,7 +713,7 @@ async function previewShare(request: Request, env: Env, ctx: ExecutionContext): 
   });
 }
 
-async function checkUploadRate(env: Env, user: AuthUser | null, ipHash: string): Promise<{ allowed: boolean; reason?: string }> {
+export async function checkUploadRate(env: Env, user: AuthUser | null, ipHash: string): Promise<{ allowed: boolean; reason?: string }> {
   const since = new Date(Date.now() - 60 * 60 * 1000).toISOString();
   const filter = user
     ? `owner_user_id=eq.${user.id}&created_at=gte.${encodeURIComponent(since)}`
@@ -731,7 +731,7 @@ export { getUserFromToken, getOptionalUser, requireUser, requireAdmin };
 export type { AuthUser };
 export { cleanTitle, sanitizeShortText, looksLikeHtml, isUploadFile, getClientIp, sha256Hex, hashText, base64Url, numberEnv, formatBytes, escapeHtml, errorMessage, logBackgroundError } from "./utils.ts";
 
-function previewHeaders(request: Request, env: Env, extra: HeadersInit = {}): Headers {
+export function previewHeaders(request: Request, env: Env, extra: HeadersInit = {}): Headers {
   const headers = new Headers(extra);
   const appOrigin = env.APP_ORIGIN || new URL(request.url).origin;
   headers.set("x-content-type-options", "nosniff");
@@ -753,7 +753,7 @@ function previewHeaders(request: Request, env: Env, extra: HeadersInit = {}): He
   return headers;
 }
 
-function previewMessage(message: string, status: number, request: Request, env: Env): Response {
+export function previewMessage(message: string, status: number, request: Request, env: Env): Response {
   const html = `<!doctype html><meta charset="utf-8"><title>Share unavailable</title><body style="font-family: ui-sans-serif, system-ui; margin: 2rem; color: #26322f;"><h1>Share unavailable</h1><p>${escapeHtml(message)}</p></body>`;
   return new Response(html, {
     status,
