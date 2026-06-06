@@ -50,7 +50,7 @@ export function Header() {
         <span className="flex items-center justify-center w-8 h-8" aria-hidden="true">
           <img src="/logo.svg" alt="" className="w-full h-full block" />
         </span>
-        <span className="text-base font-bold text-foreground tracking-tight">Share HTML</span>
+        <span className="text-base font-bold text-foreground tracking-tight whitespace-nowrap">Share HTML</span>
       </button>
 
       <div className="flex items-center gap-3 flex-wrap justify-end">
@@ -76,7 +76,7 @@ export function Header() {
             </button>
           </>
         ) : (
-          <span className="text-sm text-muted">
+          <span className="hidden sm:inline text-sm text-muted">
             Anonymous uploads expire in 365 days
           </span>
         )}
