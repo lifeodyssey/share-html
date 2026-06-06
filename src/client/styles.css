@@ -52,6 +52,30 @@ button {
   padding: 16px 0 64px;
 }
 
+/* Hero two-column layout (hand-written flex; reliable across Tailwind/HeroUI) */
+.hero-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 3rem;
+}
+.hero-grid > :first-child {
+  flex: 1 1 0;
+  min-width: 0;
+}
+.hero-grid > :last-child {
+  width: 100%;
+}
+@media (min-width: 1024px) {
+  .hero-grid {
+    flex-direction: row;
+    align-items: flex-start;
+  }
+  .hero-grid > :last-child {
+    flex: 0 0 400px;
+    width: 400px;
+  }
+}
+
 /* ---------------------------------------------------------------------------
  * Button system
  * Tests query: form.querySelector("button.button.primary")

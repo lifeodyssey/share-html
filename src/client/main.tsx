@@ -69,20 +69,20 @@ export function HomePage() {
   return (
     <div className="flex flex-col gap-16">
       {/* Hero section */}
-      <section className="grid grid-cols-1 lg:grid-cols-[1fr_auto] gap-12 items-start pt-12 pb-10 border-b border-border">
-        <div className="max-w-xl">
+      <section className="hero-grid pt-12 pb-10 border-b border-border">
+        <div className="min-w-0">
           <p className="text-xs font-semibold tracking-widest uppercase text-muted mb-3">
             Sandboxed HTML sharing
           </p>
           <h1 className="text-4xl lg:text-5xl font-bold text-foreground leading-tight tracking-tight mb-5">
             Upload one HTML file.<br />Share a live preview link.
           </h1>
-          <p className="text-base text-muted leading-relaxed max-w-lg">
+          <p className="text-base text-muted leading-relaxed" style={{ maxWidth: "34rem" }}>
             Scripts can run, but every preview is isolated behind a sandbox and checked by a small
             risk scanner before it goes public.
           </p>
         </div>
-        <div className="w-full lg:w-[400px]">
+        <div className="w-full">
           <UploadPanel />
         </div>
       </section>

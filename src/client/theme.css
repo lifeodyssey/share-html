@@ -6,6 +6,9 @@
  * The existing styles.css is still imported by main.tsx for the current
  * component styles — this file layers Tailwind utilities on top.
  */
+/* HeroUI v3 + Tailwind v4 require declaring layer order first, otherwise
+ * HeroUI styles override Tailwind utilities (grid-cols-*, max-w-* etc.). */
+@layer theme, base, components, utilities;
 @import "tailwindcss";
 @import "@heroui/styles";
 
