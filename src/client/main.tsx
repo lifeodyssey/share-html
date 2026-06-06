@@ -29,6 +29,7 @@ import {
 } from "@supabase/supabase-js";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { Link, RouterProvider, useNavigate, useParams } from "@tanstack/react-router";
+import { Button, Chip, Spinner } from "@heroui/react";
 
 import { queryClient } from "./queries";
 import {
@@ -51,9 +52,11 @@ import "./styles.css";
 
 export function SystemNotice({ title, detail }: { title: string; detail: string }) {
   return (
-    <main className="system-notice">
-      <h1>{title}</h1>
-      <p>{detail}</p>
+    <main className="flex flex-col items-center justify-center min-h-[40vh] px-6 text-center">
+      <div className="w-full max-w-md border border-border rounded-lg bg-surface p-8">
+        <h1 className="text-2xl font-bold text-foreground mb-3">{title}</h1>
+        <p className="text-muted text-sm">{detail}</p>
+      </div>
     </main>
   );
 }
@@ -64,20 +67,28 @@ export function SystemNotice({ title, detail }: { title: string; detail: string 
 
 export function HomePage() {
   return (
-    <div className="workspace">
-      <section className="upload-surface">
-        <div className="surface-copy">
-          <p className="eyebrow">Sandboxed HTML sharing</p>
-          <h1>Upload one HTML file. Share a live preview link.</h1>
-          <p className="surface-description">
+    <div className="flex flex-col gap-16">
+      {/* Hero section */}
+      <section className="grid grid-cols-1 lg:grid-cols-[1fr_auto] gap-12 items-start pt-12 pb-10 border-b border-border">
+        <div className="max-w-xl">
+          <p className="text-xs font-semibold tracking-widest uppercase text-muted mb-3">
+            Sandboxed HTML sharing
+          </p>
+          <h1 className="text-4xl lg:text-5xl font-bold text-foreground leading-tight tracking-tight mb-5">
+            Upload one HTML file.<br />Share a live preview link.
+          </h1>
+          <p className="text-base text-muted leading-relaxed max-w-lg">
             Scripts can run, but every preview is isolated behind a sandbox and checked by a small
             risk scanner before it goes public.
           </p>
         </div>
-        <UploadPanel />
+        <div className="w-full lg:w-[400px]">
+          <UploadPanel />
+        </div>
       </section>
 
-      <section className="lower-grid">
+      {/* Lower grid: auth + dashboard */}
+      <section className="grid grid-cols-1 md:grid-cols-[minmax(0,0.7fr)_minmax(0,1fr)] gap-8 pb-12">
         <AuthPanel />
         <Dashboard />
       </section>
@@ -121,35 +132,69 @@ export function SharePage() {
     ? error.message
     : reportFeedback;
 
+  const lifecycleColor = (status: string): "success" | "warning" | "danger" | "default" => {
+    if (status === "active") return "success";
+    if (status === "needs_review") return "warning";
+    if (status === "blocked" || status === "expired" || status === "removed") return "danger";
+    return "default";
+  };
+
   return (
-    <section className="share-page">
-      {statusMessage && <p className="status-line">{statusMessage}</p>}
+    <section className="flex flex-col gap-6 pt-8 border-t border-border">
+      {statusMessage && (
+        <p className={`text-sm ${error ? "text-danger" : "text-muted"}`} aria-live="polite">
+          {statusMessage}
+          {isLoading && <Spinner size="sm" color="current" className="ml-2 inline-block align-middle" />}
+        </p>
+      )}
       {share && (
         <>
-          <div className="share-header">
+          <div className="flex flex-wrap items-end justify-between gap-4">
             <div>
-              <p className="eyebrow">Public unlisted share</p>
-              <h1>{share.title || "Untitled HTML"}</h1>
-              <p className="muted">
-                {share.lifecycle_status} · risk {share.risk_score} ·{" "}
-                {share.expires_at
-                  ? `expires ${new Date(share.expires_at).toLocaleDateString()}`
-                  : "no expiry"}
+              <p className="text-xs font-semibold tracking-widest uppercase text-muted mb-2">
+                Public unlisted share
               </p>
+              <h1 className="text-3xl font-bold text-foreground tracking-tight mb-3">
+                {share.title || "Untitled HTML"}
+              </h1>
+              <div className="flex flex-wrap items-center gap-2">
+                <Chip
+                  color={lifecycleColor(share.lifecycle_status)}
+                  variant="soft"
+                  size="md"
+                >
+                  {share.lifecycle_status}
+                </Chip>
+                <span className="text-sm text-muted">
+                  risk {share.risk_score}
+                </span>
+                <span className="text-sm text-muted">
+                  {share.expires_at
+                    ? `expires ${new Date(share.expires_at).toLocaleDateString()}`
+                    : "no expiry"}
+                </span>
+              </div>
             </div>
-            <a className="button secondary" href={share.preview_url} target="_blank" rel="noreferrer">
+            <a
+              className="button secondary"
+              href={share.preview_url}
+              target="_blank"
+              rel="noreferrer"
+            >
               Full preview
             </a>
           </div>
 
           {share.lifecycle_status === "active" || share.lifecycle_status === "needs_review" ? (
-            <iframe
-              className="preview-frame"
-              title={share.title || "Shared HTML preview"}
-              src={share.preview_url}
-              sandbox="allow-scripts allow-forms allow-popups allow-downloads"
-              referrerPolicy="no-referrer"
-            />
+            <div className="rounded-lg border border-border overflow-hidden bg-surface">
+              <iframe
+                className="preview-frame"
+                title={share.title || "Shared HTML preview"}
+                src={share.preview_url}
+                sandbox="allow-scripts allow-forms allow-popups allow-downloads"
+                referrerPolicy="no-referrer"
+              />
+            </div>
           ) : (
             <SystemNotice
               title="Preview unavailable"
@@ -157,20 +202,29 @@ export function SharePage() {
             />
           )}
 
-          <form className="report-strip" onSubmit={report}>
-            <select value={reportReason} onChange={(e) => setReportReason(e.target.value)}>
-              <option value="phishing">Phishing</option>
-              <option value="malware">Malware</option>
-              <option value="copyright">Copyright</option>
-              <option value="other">Other</option>
-            </select>
-            <input
-              value={reportDetails}
-              onChange={(e) => setReportDetails(e.target.value)}
-              placeholder="Optional details"
-            />
-            <button className="button secondary">Report</button>
-          </form>
+          {/* Report strip */}
+          <div className="flex flex-wrap items-center gap-3 pt-2 border-t border-border">
+            <p className="text-xs text-muted">See something harmful?</p>
+            <form className="flex flex-wrap items-center gap-2" onSubmit={report}>
+              <select
+                className="text-sm border border-border rounded-md bg-surface text-foreground px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-accent"
+                value={reportReason}
+                onChange={(e) => setReportReason(e.target.value)}
+              >
+                <option value="phishing">Phishing</option>
+                <option value="malware">Malware</option>
+                <option value="copyright">Copyright</option>
+                <option value="other">Other</option>
+              </select>
+              <input
+                className="text-sm border border-border rounded-md bg-surface text-foreground px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-accent"
+                value={reportDetails}
+                onChange={(e) => setReportDetails(e.target.value)}
+                placeholder="Optional details"
+              />
+              <button className="button secondary" type="submit">Report</button>
+            </form>
+          </div>
         </>
       )}
     </section>
@@ -228,39 +282,67 @@ function UploadPanel() {
     });
   };
 
+  const feedbackBg = {
+    idle: "",
+    working: "bg-warning/10 border-warning/40",
+    success: "bg-success/10 border-success/40",
+    error: "bg-danger/10 border-danger/40",
+  }[feedbackKind];
+
   return (
-    <form className="upload-panel" onSubmit={submit} aria-label="Upload an HTML file to share">
-      <label className="field">
+    <form
+      className="upload-panel flex flex-col gap-4 p-5 bg-surface border border-border rounded-lg"
+      onSubmit={submit}
+      aria-label="Upload an HTML file to share"
+    >
+      {/* Title field */}
+      <label className="flex flex-col gap-1.5 text-sm font-medium text-foreground">
         <span>Title</span>
         <input
+          className="border border-border rounded-md bg-surface-alt text-foreground px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-accent placeholder:text-muted"
           value={title}
           onChange={(e) => setTitle(e.target.value)}
           placeholder="Tiny demo, receipt, prototype..."
         />
       </label>
 
-      <label className="dropzone">
+      {/* Dropzone */}
+      <label className="dropzone flex flex-col items-center justify-center gap-2 min-h-[140px] border-2 border-dashed border-border rounded-lg bg-surface-alt cursor-pointer hover:border-accent/60 transition-colors p-5 text-center">
         <input
           type="file"
           accept=".html,.htm,text/html"
           aria-label="Choose an HTML file"
           onChange={(e) => setFile(e.target.files?.[0] ?? null)}
+          className="sr-only"
         />
-        <span className="dropzone-main">{file ? file.name : "Choose index.html"}</span>
-        <span className="dropzone-sub">
+        <span className={`font-mono text-sm font-semibold text-foreground overflow-wrap-anywhere ${file ? "text-foreground" : "text-muted"}`}>
+          {file ? file.name : "Choose index.html"}
+        </span>
+        <span className="text-xs text-muted">
           {session ? "Up to 5 MB" : "Anonymous uploads up to 1 MB"}
         </span>
       </label>
 
-      <button className="button primary" disabled={busy}>
+      {/* Primary action — one per view */}
+      <button
+        className="button primary w-full flex items-center justify-center gap-2"
+        disabled={busy}
+        type="submit"
+      >
+        {busy && <Spinner size="sm" color="current" />}
         {busy ? "Publishing..." : "Create share"}
       </button>
-      {status && (
-        <div className={`upload-feedback ${feedbackKind}`} aria-live="polite">
-          <strong>{feedbackTitle(feedbackKind)}</strong>
-          <span>{status}</span>
+
+      {/* Feedback */}
+      {status && feedbackKind !== "idle" && (
+        <div
+          className={`flex flex-col gap-1.5 rounded-md border px-4 py-3 text-sm ${feedbackBg}`}
+          aria-live="polite"
+        >
+          <strong className="font-semibold text-foreground">{feedbackTitle(feedbackKind)}</strong>
+          <span className="text-muted">{status}</span>
           {busy && (
-            <div className="publish-steps" aria-label="Publish progress">
+            <div className="publish-steps mt-1" aria-label="Publish progress">
               <span>Upload</span>
               <span>Scan</span>
               <span>Publish</span>
@@ -269,14 +351,19 @@ function UploadPanel() {
         </div>
       )}
 
+      {/* Result block */}
       {result && (
-        <div className="result-block">
-          <div className="result-heading">
+        <div className="result-block flex flex-col gap-4 pt-4 border-t border-border">
+          <div className="flex flex-wrap items-end justify-between gap-3">
             <div>
-              <p className="eyebrow">Published</p>
-              <h2>{result.share.title || "Untitled HTML"}</h2>
+              <p className="text-xs font-semibold tracking-widest uppercase text-muted mb-1">
+                Published
+              </p>
+              <h2 className="text-lg font-bold text-foreground">
+                {result.share.title || "Untitled HTML"}
+              </h2>
             </div>
-            <div className="result-actions">
+            <div className="flex items-center gap-2">
               <Link
                 to="/s/$slug"
                 params={{ slug: result.share.slug }}
@@ -294,6 +381,7 @@ function UploadPanel() {
               </a>
             </div>
           </div>
+
           <CopyLine
             label="Share URL"
             value={result.share.share_url}
@@ -321,7 +409,7 @@ function UploadPanel() {
             </>
           )}
           {result.share.risk_reasons.length > 0 && (
-            <ul className="risk-list">
+            <ul className="flex flex-col gap-1 pl-4 list-disc text-sm text-danger">
               {result.share.risk_reasons.map((reason) => (
                 <li key={reason.code}>{reason.detail}</li>
               ))}
@@ -363,30 +451,33 @@ function AuthPanel() {
   const mailboxUrl = getMailboxUrl(email);
 
   return (
-    <section className="panel">
-      <div className="panel-heading">
-        <p className="eyebrow">Account</p>
-        <h2>{session ? "Signed in" : "Keep your shares"}</h2>
+    <section className="flex flex-col gap-4 p-5 bg-surface border border-border rounded-lg">
+      <div>
+        <p className="text-xs font-semibold tracking-widest uppercase text-muted mb-1">Account</p>
+        <h2 className="text-xl font-bold text-foreground">
+          {session ? "Signed in" : "Keep your shares"}
+        </h2>
       </div>
       {session ? (
-        <p className="muted">
+        <p className="text-sm text-muted">
           Uploaded shares stay attached to this Supabase account until you delete them.
         </p>
       ) : (
-        <form className="inline-form" onSubmit={signIn}>
+        <form className="flex flex-col gap-2" onSubmit={signIn}>
           <input
+            className="border border-border rounded-md bg-surface-alt text-foreground px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-accent placeholder:text-muted"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
             type="email"
             placeholder="you@example.com"
             required
           />
-          <button className="button secondary">Send link</button>
+          <button className="button secondary" type="submit">Send link</button>
         </form>
       )}
       {message && (
-        <div className="mail-feedback">
-          <p className="status-line">{message}</p>
+        <div className="flex items-center justify-between gap-3 mt-1">
+          <p className="text-sm text-muted">{message}</p>
           {linkSent && mailboxUrl && (
             <a className="button ghost" href={mailboxUrl} target="_blank" rel="noreferrer">
               Open inbox
@@ -440,44 +531,65 @@ function Dashboard() {
     }
   };
 
+  const lifecycleColor = (status: string): "success" | "warning" | "danger" | "default" => {
+    if (status === "active") return "success";
+    if (status === "needs_review") return "warning";
+    if (status === "blocked" || status === "expired" || status === "removed") return "danger";
+    return "default";
+  };
+
   return (
-    <section className="panel">
-      <div className="panel-heading">
-        <p className="eyebrow">Library</p>
-        <h2>Your shares</h2>
+    <section className="flex flex-col gap-4 p-5 bg-surface border border-border rounded-lg">
+      <div>
+        <p className="text-xs font-semibold tracking-widest uppercase text-muted mb-1">Library</p>
+        <h2 className="text-xl font-bold text-foreground">Your shares</h2>
       </div>
       {!session ? (
-        <p className="muted">
+        <p className="text-sm text-muted">
           Sign in to keep shares, remove them later, or claim anonymous uploads.
         </p>
       ) : (
         <>
-          <form className="claim-form" onSubmit={claim}>
+          {/* Claim form */}
+          <form className="flex flex-wrap items-center gap-2" onSubmit={claim}>
             <input
+              className="flex-1 min-w-[120px] border border-border rounded-md bg-surface-alt text-foreground px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-accent placeholder:text-muted"
               value={claimShareId}
               onChange={(e) => setClaimShareId(e.target.value)}
               placeholder="Anonymous share id"
             />
             <input
+              className="flex-1 min-w-[120px] border border-border rounded-md bg-surface-alt text-foreground px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-accent placeholder:text-muted"
               value={claimToken}
               onChange={(e) => setClaimToken(e.target.value)}
               placeholder="Claim token"
             />
-            <button className="button secondary">Claim</button>
+            <button className="button secondary" type="submit">Claim</button>
           </form>
-          <div className="share-list">
+
+          {/* Share list */}
+          <div className="flex flex-col divide-y divide-border">
             {shares.length === 0 ? (
-              <p className="muted">No shares yet.</p>
+              <p className="text-sm text-muted py-2">No shares yet.</p>
             ) : (
               shares.map((share) => (
-                <article className="share-row" key={share.id}>
-                  <div>
-                    <strong>{share.title || "Untitled HTML"}</strong>
-                    <span>
-                      {share.lifecycle_status} · {formatBytes(share.size_bytes)}
-                    </span>
+                <article className="flex items-center justify-between gap-3 py-3" key={share.id}>
+                  <div className="flex flex-col gap-1 min-w-0">
+                    <strong className="text-sm font-semibold text-foreground truncate">
+                      {share.title || "Untitled HTML"}
+                    </strong>
+                    <div className="flex items-center gap-2">
+                      <Chip
+                        color={lifecycleColor(share.lifecycle_status)}
+                        variant="soft"
+                        size="md"
+                      >
+                        {share.lifecycle_status}
+                      </Chip>
+                      <span className="text-xs text-muted">{formatBytes(share.size_bytes)}</span>
+                    </div>
                   </div>
-                  <div className="row-actions">
+                  <div className="flex items-center gap-2 flex-shrink-0">
                     <button
                       className="button ghost"
                       onClick={() =>
@@ -499,14 +611,14 @@ function Dashboard() {
           </div>
         </>
       )}
-      {sharesError && <p className="status-line">{sharesError.message}</p>}
-      {actionMessage && <p className="status-line">{actionMessage}</p>}
+      {sharesError && <p className="text-sm text-danger mt-1">{sharesError.message}</p>}
+      {actionMessage && <p className="text-sm text-muted mt-1">{actionMessage}</p>}
     </section>
   );
 }
 
 // ---------------------------------------------------------------------------
-// CopyLine
+// CopyLine – mono value with copy + open actions
 // ---------------------------------------------------------------------------
 
 function CopyLine({
@@ -528,13 +640,20 @@ function CopyLine({
   };
 
   return (
-    <div className="copy-line">
-      <span className="copy-meta">
-        <strong>{label}</strong>
-        {description && <small>{description}</small>}
-      </span>
-      <code>{value}</code>
-      <span className="copy-actions">
+    <div className="flex flex-col sm:flex-row sm:items-start gap-2 border border-border rounded-md bg-surface-alt px-3 py-2.5 text-sm">
+      {/* Label + description */}
+      <div className="flex flex-col gap-0.5 sm:w-32 shrink-0">
+        <strong className="font-semibold text-foreground">{label}</strong>
+        {description && (
+          <small className="text-xs text-muted leading-snug">{description}</small>
+        )}
+      </div>
+      {/* Mono value */}
+      <code className="flex-1 font-mono text-xs text-accent overflow-hidden text-ellipsis whitespace-nowrap min-w-0 self-center">
+        {value}
+      </code>
+      {/* Actions */}
+      <span className="flex items-center gap-1.5 shrink-0">
         {href && (
           <a
             className="button ghost icon-button"
