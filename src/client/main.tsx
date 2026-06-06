@@ -42,6 +42,7 @@ import {
 } from "./queries";
 import { SessionContext, useSession } from "./session";
 import { router } from "./router";
+import "./theme.css";
 import "./styles.css";
 
 // ---------------------------------------------------------------------------
