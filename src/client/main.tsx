@@ -26,12 +26,10 @@ import { createRoot } from "react-dom/client";
 import {
   createClient,
   Session,
-  SupabaseClient,
 } from "@supabase/supabase-js";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { Link, RouterProvider, useNavigate, useParams } from "@tanstack/react-router";
 
-import type { PublicShare } from "../shared/types";
 import { queryClient } from "./queries";
 import {
   useConfig,
@@ -64,8 +62,6 @@ export function SystemNotice({ title, detail }: { title: string; detail: string 
 // ---------------------------------------------------------------------------
 
 export function HomePage() {
-  const { session, supabase } = useSession();
-
   return (
     <div className="workspace">
       <section className="upload-surface">
@@ -81,7 +77,7 @@ export function HomePage() {
       </section>
 
       <section className="lower-grid">
-        {supabase && <AuthPanel supabase={supabase} session={session} />}
+        <AuthPanel />
         <Dashboard />
       </section>
     </div>
@@ -95,34 +91,34 @@ export function HomePage() {
 export function SharePage() {
   const { slug } = useParams({ from: "/s/$slug" });
   const { session } = useSession();
-  const { data: share, isLoading, error } = usePublicShare(slug);
+  const { data: share, isPending: isLoading, error } = usePublicShare(slug);
   const reportMutation = useReportShare();
 
   const [reportReason, setReportReason] = useState("phishing");
   const [reportDetails, setReportDetails] = useState("");
-  const [reportMessage, setReportMessage] = useState("");
 
-  const report = async (event: FormEvent) => {
+  const report = (event: FormEvent) => {
     event.preventDefault();
     if (!share) return;
-    try {
-      await reportMutation.mutateAsync({
-        shareId: share.id,
-        reason: reportReason,
-        details: reportDetails,
-        accessToken: session?.access_token,
-      });
-      setReportMessage("Report received.");
-    } catch {
-      setReportMessage("Report failed.");
-    }
+    reportMutation.mutate({
+      shareId: share.id,
+      reason: reportReason,
+      details: reportDetails,
+      accessToken: session?.access_token,
+    });
   };
+
+  const reportFeedback = reportMutation.isSuccess
+    ? "Report received."
+    : reportMutation.isError
+    ? (reportMutation.error instanceof Error ? reportMutation.error.message : "Report failed.")
+    : "";
 
   const statusMessage = isLoading
     ? "Loading share..."
     : error
     ? error.message
-    : reportMessage;
+    : reportFeedback;
 
   return (
     <section className="share-page">
@@ -191,37 +187,44 @@ function UploadPanel() {
 
   const [file, setFile] = useState<File | null>(null);
   const [title, setTitle] = useState("");
-  const [status, setStatus] = useState("");
-  const [feedbackKind, setFeedbackKind] = useState<"idle" | "working" | "success" | "error">(
-    "idle"
-  );
+  const [validationError, setValidationError] = useState("");
 
   const result = uploadMutation.data ?? null;
   const busy = uploadMutation.isPending;
 
+  // Derive feedback kind and status message from mutation state.
+  const feedbackKind: "idle" | "working" | "success" | "error" = validationError
+    ? "error"
+    : busy
+    ? "working"
+    : uploadMutation.isSuccess
+    ? "success"
+    : uploadMutation.isError
+    ? "error"
+    : "idle";
+
+  const status = validationError
+    ? validationError
+    : busy
+    ? "Uploading and scanning..."
+    : uploadMutation.isSuccess
+    ? "Your share is live."
+    : uploadMutation.isError
+    ? (uploadMutation.error instanceof Error ? uploadMutation.error.message : "Upload failed")
+    : "";
+
   const submit = async (event: FormEvent) => {
     event.preventDefault();
     if (!file) {
-      setStatus("Choose an HTML file first.");
-      setFeedbackKind("error");
+      setValidationError("Choose an HTML file first.");
       return;
     }
-
-    setStatus("Uploading and scanning...");
-    setFeedbackKind("working");
-
-    try {
-      await uploadMutation.mutateAsync({
-        file,
-        title,
-        accessToken: session?.access_token,
-      });
-      setStatus("Your share is live.");
-      setFeedbackKind("success");
-    } catch (error) {
-      setStatus(error instanceof Error ? error.message : "Upload failed");
-      setFeedbackKind("error");
-    }
+    setValidationError("");
+    uploadMutation.mutate({
+      file,
+      title,
+      accessToken: session?.access_token,
+    });
   };
 
   return (
@@ -333,19 +336,15 @@ function UploadPanel() {
 // AuthPanel
 // ---------------------------------------------------------------------------
 
-function AuthPanel({
-  supabase,
-  session,
-}: {
-  supabase: SupabaseClient;
-  session: Session | null;
-}) {
+function AuthPanel() {
+  const { session, supabase } = useSession();
   const [email, setEmail] = useState("");
   const [message, setMessage] = useState("");
   const [linkSent, setLinkSent] = useState(false);
 
   const signIn = async (event: FormEvent) => {
     event.preventDefault();
+    if (!supabase) return;
     setLinkSent(false);
     setMessage("Sending link...");
     const { error } = await supabase.auth.signInWithOtp({
@@ -404,26 +403,22 @@ function AuthPanel({
 
 function Dashboard() {
   const { session } = useSession();
-  const { data: shares = [], error: sharesError } = useMyShares(session?.access_token);
+  const { data: shares = [], error: sharesError } = useMyShares(session?.user.id, session?.access_token);
   const deleteMutation = useDeleteShare();
   const claimMutation = useClaimShare();
   const navigate = useNavigate();
 
   const [claimToken, setClaimToken] = useState("");
   const [claimShareId, setClaimShareId] = useState("");
-  const [message, setMessage] = useState("");
-
-  useEffect(() => {
-    if (sharesError) setMessage(sharesError.message);
-  }, [sharesError]);
+  const [actionMessage, setActionMessage] = useState("");
 
   const deleteShare = async (id: string) => {
     if (!session) return;
     try {
       await deleteMutation.mutateAsync({ id, accessToken: session.access_token });
-      setMessage("Deleted.");
+      setActionMessage("Deleted.");
     } catch {
-      setMessage("Delete failed.");
+      setActionMessage("Delete failed.");
     }
   };
 
@@ -436,11 +431,11 @@ function Dashboard() {
         claimToken,
         accessToken: session.access_token,
       });
-      setMessage("Claimed.");
+      setActionMessage("Claimed.");
       setClaimShareId("");
       setClaimToken("");
     } catch (error) {
-      setMessage(error instanceof Error ? error.message : "Claim failed.");
+      setActionMessage(error instanceof Error ? error.message : "Claim failed.");
     }
   };
 
@@ -503,7 +498,8 @@ function Dashboard() {
           </div>
         </>
       )}
-      {message && <p className="status-line">{message}</p>}
+      {sharesError && <p className="status-line">{sharesError.message}</p>}
+      {actionMessage && <p className="status-line">{actionMessage}</p>}
     </section>
   );
 }
