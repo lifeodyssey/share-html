@@ -33,7 +33,8 @@ import type { PublicShare } from "../shared/types";
 
 export const queryKeys = {
   config: ["config"] as const,
-  myShares: (token: string) => ["myShares", token] as const,
+  myShares: (userId: string) => ["myShares", userId] as const,
+  mySharesAll: ["myShares"] as const,
   publicShare: (slug: string) => ["publicShare", slug] as const,
 };
 
@@ -69,21 +70,27 @@ export function useConfig() {
   return useQuery<AppConfig, Error>({
     queryKey: queryKeys.config,
     queryFn: fetchConfig,
+    staleTime: Infinity,
   });
 }
 
 /**
  * Lists all shares owned by the authenticated user.
- * Query key: ['myShares', accessToken]
- * Only runs when `accessToken` is a non-empty string.
+ * Query key: ['myShares', userId] — keyed on the stable user id so the
+ * cache doesn't thrash when the JWT refreshes hourly.
+ * Only runs when both userId and accessToken are non-empty.
  *
- * @param accessToken - Supabase JWT; pass undefined / null / '' to disable.
+ * @param userId - Supabase user id; pass undefined / null / '' to disable.
+ * @param accessToken - Supabase JWT used in the queryFn; not part of the key.
  */
-export function useMyShares(accessToken: string | null | undefined) {
+export function useMyShares(
+  userId: string | null | undefined,
+  accessToken: string | null | undefined
+) {
   return useQuery<PublicShare[], Error>({
-    queryKey: queryKeys.myShares(accessToken ?? ""),
+    queryKey: queryKeys.myShares(userId ?? ""),
     queryFn: () => listShares(accessToken!),
-    enabled: !!accessToken,
+    enabled: !!userId && !!accessToken,
   });
 }
 
@@ -96,6 +103,7 @@ export function usePublicShare(slug: string) {
     queryKey: queryKeys.publicShare(slug),
     queryFn: () => fetchPublicShare(slug),
     enabled: !!slug,
+    staleTime: 5 * 60 * 1000,
   });
 }
 
@@ -117,7 +125,7 @@ export function useUploadShare() {
     mutationFn: ({ file, title, accessToken }) =>
       apiUploadShare(file, title, accessToken),
     onSuccess: () => {
-      void qc.invalidateQueries({ queryKey: ["myShares"] });
+      void qc.invalidateQueries({ queryKey: queryKeys.mySharesAll });
     },
   });
 }
@@ -131,7 +139,7 @@ export function useDeleteShare() {
   return useMutation<void, Error, { id: string; accessToken: string }>({
     mutationFn: ({ id, accessToken }) => apiDeleteShare(id, accessToken),
     onSuccess: () => {
-      void qc.invalidateQueries({ queryKey: ["myShares"] });
+      void qc.invalidateQueries({ queryKey: queryKeys.mySharesAll });
     },
   });
 }
@@ -150,7 +158,7 @@ export function useClaimShare() {
     mutationFn: ({ shareId, claimToken, accessToken }) =>
       apiClaimShare(shareId, claimToken, accessToken),
     onSuccess: () => {
-      void qc.invalidateQueries({ queryKey: ["myShares"] });
+      void qc.invalidateQueries({ queryKey: queryKeys.mySharesAll });
     },
   });
 }

@@ -132,8 +132,8 @@ describe("useMyShares", () => {
     vi.clearAllMocks();
   });
 
-  it("fetches shares when token is present", async () => {
-    const { result } = renderHook(() => useMyShares("tok-abc"), {
+  it("fetches shares when userId and token are present", async () => {
+    const { result } = renderHook(() => useMyShares("uid-1", "tok-abc"), {
       wrapper: makeWrapper(client),
     });
 
@@ -143,8 +143,8 @@ describe("useMyShares", () => {
     expect(api.listShares).toHaveBeenCalledWith("tok-abc");
   });
 
-  it("does NOT fetch when token is absent", async () => {
-    const { result } = renderHook(() => useMyShares(null), {
+  it("does NOT fetch when userId is absent", async () => {
+    const { result } = renderHook(() => useMyShares(null, "tok-abc"), {
       wrapper: makeWrapper(client),
     });
 
@@ -154,8 +154,8 @@ describe("useMyShares", () => {
     expect(api.listShares).not.toHaveBeenCalled();
   });
 
-  it("does NOT fetch when token is an empty string", async () => {
-    const { result } = renderHook(() => useMyShares(""), {
+  it("does NOT fetch when userId is an empty string", async () => {
+    const { result } = renderHook(() => useMyShares("", "tok-abc"), {
       wrapper: makeWrapper(client),
     });
 
