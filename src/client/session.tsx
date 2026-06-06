@@ -41,18 +41,21 @@ export function Header() {
   const navigate = useNavigate();
 
   return (
-    <header className="topbar">
+    <header className="flex items-center justify-between gap-4 py-3 border-b border-border mb-2">
       <button
-        className="brand"
+        className="inline-flex items-center gap-2.5 border-0 bg-transparent p-0 cursor-pointer"
         onClick={() => void navigate({ to: "/" })}
         aria-label="Go home"
       >
-        <LogoMark />
-        <span className="brand-name">Share HTML</span>
+        <span className="flex items-center justify-center w-8 h-8" aria-hidden="true">
+          <img src="/logo.svg" alt="" className="w-full h-full block" />
+        </span>
+        <span className="text-base font-bold text-foreground tracking-tight">Share HTML</span>
       </button>
-      <div className="account-strip">
+
+      <div className="flex items-center gap-3 flex-wrap justify-end">
         <a
-          className="button ghost source-link"
+          className="button ghost"
           href={GITHUB_URL}
           target="_blank"
           rel="noreferrer"
@@ -62,7 +65,9 @@ export function Header() {
         </a>
         {session?.user ? (
           <>
-            <span className="account-email">{session.user.email}</span>
+            <span className="text-sm text-muted truncate max-w-[200px]">
+              {session.user.email}
+            </span>
             <button
               className="button secondary"
               onClick={() => supabase?.auth.signOut()}
@@ -71,7 +76,7 @@ export function Header() {
             </button>
           </>
         ) : (
-          <span className="account-email">
+          <span className="text-sm text-muted">
             Anonymous uploads expire in 365 days
           </span>
         )}
@@ -83,14 +88,6 @@ export function Header() {
 // ---------------------------------------------------------------------------
 // Inline icon components used by Header
 // ---------------------------------------------------------------------------
-
-function LogoMark() {
-  return (
-    <span className="brand-mark" aria-hidden="true">
-      <img src="/logo.svg" alt="" />
-    </span>
-  );
-}
 
 function GitHubIcon() {
   return (
