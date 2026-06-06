@@ -20,6 +20,27 @@ export type ApiError = {
 };
 
 // ---------------------------------------------------------------------------
+// Internal helpers
+// ---------------------------------------------------------------------------
+
+/**
+ * Asserts the response is ok and returns the parsed JSON body.
+ * If the server included an `error` field in the payload, that message is
+ * used; otherwise `fallback` is thrown. Non-JSON error bodies fall back to
+ * `fallback` rather than surfacing a parse error.
+ */
+async function expectOk<T>(res: Response, fallback: string): Promise<T> {
+  let payload: (T & ApiError) | null = null;
+  try {
+    payload = (await res.json()) as T & ApiError;
+  } catch {
+    if (!res.ok) throw new Error(fallback);
+  }
+  if (!res.ok) throw new Error(payload?.error ?? fallback);
+  return payload as T;
+}
+
+// ---------------------------------------------------------------------------
 // API functions
 // ---------------------------------------------------------------------------
 
@@ -55,9 +76,7 @@ export async function uploadShare(
     headers: accessToken ? { authorization: `Bearer ${accessToken}` } : undefined,
     body
   });
-  const payload = (await response.json()) as UploadResult & ApiError;
-  if (!response.ok) throw new Error(payload.error ?? "Upload failed");
-  return payload;
+  return expectOk<UploadResult>(response, "Upload failed");
 }
 
 /**
@@ -70,8 +89,7 @@ export async function listShares(accessToken: string): Promise<PublicShare[]> {
   const response = await fetch("/api/shares", {
     headers: { authorization: `Bearer ${accessToken}` }
   });
-  const payload = (await response.json()) as { shares?: PublicShare[] } & ApiError;
-  if (!response.ok) throw new Error(payload.error ?? "Could not load shares");
+  const payload = await expectOk<{ shares?: PublicShare[] }>(response, "Could not load shares");
   return payload.shares ?? [];
 }
 
@@ -87,7 +105,7 @@ export async function deleteShare(id: string, accessToken: string): Promise<void
     method: "DELETE",
     headers: { authorization: `Bearer ${accessToken}` }
   });
-  if (!response.ok) throw new Error("Delete failed.");
+  await expectOk<unknown>(response, "Delete failed.");
 }
 
 /**
@@ -111,8 +129,7 @@ export async function claimShare(
     },
     body: JSON.stringify({ claimToken })
   });
-  const payload = (await response.json()) as ApiError;
-  if (!response.ok) throw new Error(payload.error ?? "Claim failed.");
+  await expectOk<unknown>(response, "Claim failed.");
 }
 
 /**
@@ -123,8 +140,8 @@ export async function claimShare(
  */
 export async function fetchPublicShare(slug: string): Promise<PublicShare> {
   const response = await fetch(`/api/public/shares/${slug}`);
-  const payload = (await response.json()) as { share?: PublicShare } & ApiError;
-  if (!response.ok || !payload.share) throw new Error(payload.error ?? "Share not found");
+  const payload = await expectOk<{ share?: PublicShare }>(response, "Share not found");
+  if (!payload.share) throw new Error("Share not found");
   return payload.share;
 }
 
@@ -151,5 +168,5 @@ export async function reportShare(
     },
     body: JSON.stringify({ reason, details })
   });
-  if (!response.ok) throw new Error("Report failed.");
+  await expectOk<unknown>(response, "Report failed.");
 }
