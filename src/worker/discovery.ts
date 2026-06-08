@@ -171,10 +171,15 @@ export function mcpServerCard() {
 
 export function a2aAgentCard() {
   return {
+    protocolVersion: "0.3.0",
     name: "Share HTML",
     description: "Upload one HTML file and get a public sandboxed shareable preview link.",
     url: SITE_ORIGIN,
     version: "1.0.0",
+    preferredTransport: "HTTP+JSON",
+    supportedInterfaces: [
+      { url: SITE_ORIGIN, transport: "HTTP+JSON" }
+    ],
     capabilities: { streaming: false },
     defaultInputModes: ["text"],
     defaultOutputModes: ["text"],
