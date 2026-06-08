@@ -4,6 +4,7 @@ import { test } from "vitest";
 import {
   a2aAgentCard,
   authMarkdown,
+  oauthAuthorizationServer,
   openApiDocument,
   robotsTxt,
   sitemapXml,
@@ -112,6 +113,28 @@ test("authMarkdown: mentions GET /api/shares", () => {
 test("authMarkdown: mentions DELETE /api/shares/{id}", () => {
   const md = authMarkdown();
   assert.ok(md.includes("DELETE /api/shares/{id}"), "expected DELETE /api/shares/{id} in authMarkdown");
+});
+
+test("authMarkdown: H1 heading contains 'auth.md' (scanner requirement)", () => {
+  const firstLine = authMarkdown().split("\n")[0];
+  assert.ok(firstLine.startsWith("# "), `expected an H1 heading, got: ${firstLine}`);
+  assert.ok(firstLine.includes("auth.md"), `expected H1 to contain 'auth.md', got: ${firstLine}`);
+});
+
+// ---------------------------------------------------------------------------
+// oauthAuthorizationServer
+// ---------------------------------------------------------------------------
+
+test("oauthAuthorizationServer: includes an agent_auth block with required fields", () => {
+  const meta = oauthAuthorizationServer() as Record<string, any>;
+  assert.ok(meta.agent_auth, "expected agent_auth block");
+  assert.ok(meta.agent_auth.skill.endsWith("/auth.md"), "agent_auth.skill should point to /auth.md");
+  assert.ok(meta.agent_auth.register_uri.includes("/api/shares"), "agent_auth.register_uri should be the upload endpoint");
+  assert.deepEqual(meta.agent_auth.identity_types_supported, ["anonymous"]);
+  assert.ok(
+    meta.agent_auth.identity_assertion.anonymous.claim_uri.includes("/claim"),
+    "anonymous flow should advertise a claim_uri"
+  );
 });
 
 // ---------------------------------------------------------------------------
