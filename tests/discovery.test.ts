@@ -96,6 +96,16 @@ test("a2aAgentCard: has name 'Share HTML'", () => {
   assert.equal(card.name, "Share HTML");
 });
 
+test("a2aAgentCard: declares a non-empty supportedInterfaces with url + transport", () => {
+  const card = a2aAgentCard() as Record<string, any>;
+  assert.ok(Array.isArray(card.supportedInterfaces) && card.supportedInterfaces.length > 0,
+    "expected non-empty supportedInterfaces array");
+  const iface = card.supportedInterfaces[0];
+  assert.ok(iface.url && iface.transport, "each interface needs url and transport");
+  assert.ok(card.protocolVersion, "expected protocolVersion");
+  assert.ok(card.preferredTransport, "expected preferredTransport");
+});
+
 // ---------------------------------------------------------------------------
 // authMarkdown
 // ---------------------------------------------------------------------------
