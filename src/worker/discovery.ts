@@ -134,7 +134,21 @@ export function oauthAuthorizationServer() {
       "preferred_username",
       "updated_at"
     ],
-    code_challenge_methods_supported: ["S256", "plain"]
+    code_challenge_methods_supported: ["S256", "plain"],
+    // auth.md agent-registration extension. Share HTML has no OAuth client
+    // registration; an agent "registers" by creating an anonymous resource and
+    // receives a claim token, which a signed-in account later claims.
+    agent_auth: {
+      skill: `${SITE_ORIGIN}/auth.md`,
+      register_uri: `${SITE_ORIGIN}/api/shares`,
+      identity_types_supported: ["anonymous"],
+      identity_assertion: {
+        anonymous: {
+          credential_types_supported: ["claim_token"],
+          claim_uri: `${SITE_ORIGIN}/api/shares/{id}/claim`
+        }
+      }
+    }
   };
 }
 
@@ -321,11 +335,20 @@ export function securityTxt(): string {
 
 export function authMarkdown(): string {
   return [
-    "# Authentication — Share HTML",
+    "# auth.md — Share HTML",
+    "",
+    "Agent audience: automated agents and humans uploading a single HTML file for a",
+    "sandboxed public preview link. No agent pre-registration is required; uploading",
+    "anonymously provisions a resource and returns a claim token.",
     "",
     "## Anonymous (no auth)",
-    "- `POST /api/shares` accepts uploads with no authentication.",
+    "- `POST /api/shares` accepts uploads with no authentication (the registration endpoint).",
+    "- The response returns a one-time `claimToken` so the upload can be claimed later.",
     "- Anonymous uploads are rate-limited and kept for 365 days.",
+    "",
+    "## Claim ceremony (anonymous to owned)",
+    "- `POST /api/shares/{id}/claim` with the `claimToken` and a Bearer token transfers an",
+    "  anonymous upload to a signed-in account.",
     "",
     "## Signed-in (Supabase)",
     "- Sign-in uses Supabase email OTP (magic link).",
@@ -336,6 +359,8 @@ export function authMarkdown(): string {
     "- `DELETE /api/shares/{id}` — delete a share",
     "- `POST /api/shares/{id}/claim` — claim an anonymous upload",
     "",
-    `Discovery: ${SITE_ORIGIN}/.well-known/oauth-protected-resource`
+    "## Machine-readable metadata",
+    `- OAuth Protected Resource: ${SITE_ORIGIN}/.well-known/oauth-protected-resource`,
+    `- OAuth Authorization Server (includes \`agent_auth\`): ${SITE_ORIGIN}/.well-known/oauth-authorization-server`
   ].join("\n");
 }
