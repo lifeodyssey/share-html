@@ -1,204 +1,353 @@
-import React, { FormEvent, useEffect, useMemo, useState } from "react";
+/**
+ * Application entry point and route-level component definitions.
+ *
+ * Architecture after TanStack migration:
+ *  - Root render: <QueryClientProvider> → <App>
+ *  - App: loads config via useConfig(), initialises Supabase, attaches the
+ *    onAuthStateChange listener, then renders <SessionContext.Provider> →
+ *    <RouterProvider router={router}>.
+ *  - Session state: managed by SessionContext (session.tsx); consumed by
+ *    components via useSession().
+ *  - Data fetching: all network calls go through hooks in queries.ts; no raw
+ *    fetch() calls inside components.
+ *  - Routing: TanStack Router handles URL matching; <Link> / useNavigate()
+ *    replace manual pushState.
+ *
+ * Exported so router.tsx can reference them in the route tree:
+ *   HomePage, SharePage
+ */
+import React, {
+  FormEvent,
+  useEffect,
+  useMemo,
+  useState,
+} from "react";
 import { createRoot } from "react-dom/client";
-import { createClient, Session, SupabaseClient, User } from "@supabase/supabase-js";
-import type { PublicShare } from "../shared/types";
+import {
+  createClient,
+  Session,
+} from "@supabase/supabase-js";
+import { QueryClientProvider } from "@tanstack/react-query";
+import { Link, RouterProvider, useNavigate, useParams } from "@tanstack/react-router";
+import { Button, Chip, Spinner } from "@heroui/react";
+
+import { queryClient } from "./queries";
+import {
+  useConfig,
+  useMyShares,
+  usePublicShare,
+  useUploadShare,
+  useDeleteShare,
+  useClaimShare,
+  useReportShare,
+} from "./queries";
+import { SessionContext, useSession } from "./session";
+import { router } from "./router";
+import "./theme.css";
 import "./styles.css";
 
-type AppConfig = {
-  supabaseUrl: string;
-  supabasePublishableKey: string;
-};
+// ---------------------------------------------------------------------------
+// SystemNotice – used before the router is ready (no routing context)
+// ---------------------------------------------------------------------------
 
-type UploadResult = {
-  share: PublicShare;
-  claimToken: string | null;
-  message: string;
-};
-
-type ApiError = {
-  error?: string;
-};
-
-const GITHUB_URL = "https://github.com/lifeodyssey/share-html";
-
-function App() {
-  const [config, setConfig] = useState<AppConfig | null>(null);
-  const [configError, setConfigError] = useState("");
-  const [session, setSession] = useState<Session | null>(null);
-  const [route, setRoute] = useState(() => window.location.pathname);
-
-  useEffect(() => {
-    fetch("/api/config")
-      .then((response) => response.ok ? response.json<AppConfig>() : Promise.reject(new Error("Config unavailable")))
-      .then(setConfig)
-      .catch((error: Error) => setConfigError(error.message));
-  }, []);
-
-  const supabase = useMemo(() => {
-    if (!config) return null;
-    return createClient(config.supabaseUrl, config.supabasePublishableKey);
-  }, [config]);
-
-  useEffect(() => {
-    if (!supabase) return;
-    supabase.auth.getSession().then(({ data }) => setSession(data.session));
-    const { data } = supabase.auth.onAuthStateChange((_event, nextSession) => {
-      setSession(nextSession);
-    });
-    return () => data.subscription.unsubscribe();
-  }, [supabase]);
-
-  useEffect(() => {
-    const onPopState = () => setRoute(window.location.pathname);
-    window.addEventListener("popstate", onPopState);
-    return () => window.removeEventListener("popstate", onPopState);
-  }, []);
-
-  const navigate = (path: string) => {
-    window.history.pushState({}, "", path);
-    setRoute(path);
-  };
-
-  if (configError) return <SystemNotice title="Configuration error" detail={configError} />;
-  if (!config || !supabase) return <SystemNotice title="Preparing app" detail="Loading Supabase configuration." />;
-
-  const slugMatch = route.match(/^\/s\/([^/]+)$/);
-
+export function SystemNotice({ title, detail }: { title: string; detail: string }) {
   return (
-    <main className="app-shell">
-      <Header
-        user={session?.user ?? null}
-        supabase={supabase}
-        onHome={() => navigate("/")}
-      />
-
-      {slugMatch ? (
-        <SharePage slug={slugMatch[1]} session={session} />
-      ) : (
-        <HomePage supabase={supabase} session={session} onOpenShare={(slug) => navigate(`/s/${slug}`)} />
-      )}
+    <main className="flex flex-col items-center justify-center min-h-[40vh] px-6 text-center">
+      <div className="w-full max-w-md border border-border rounded-lg bg-surface p-8">
+        <h1 className="text-2xl font-bold text-foreground mb-3">{title}</h1>
+        <p className="text-muted text-sm">{detail}</p>
+      </div>
     </main>
   );
 }
 
-function Header({ user, supabase, onHome }: { user: User | null; supabase: SupabaseClient; onHome: () => void }) {
-  return (
-    <header className="topbar">
-      <button className="brand" onClick={onHome} aria-label="Go home">
-        <LogoMark />
-        <span className="brand-name">Share HTML</span>
-      </button>
-      <div className="account-strip">
-        <a className="button ghost source-link" href={GITHUB_URL} target="_blank" rel="noreferrer">
-          <GitHubIcon />
-          GitHub
-        </a>
-        {user ? (
-          <>
-            <span className="account-email">{user.email}</span>
-            <button className="button secondary" onClick={() => supabase.auth.signOut()}>Sign out</button>
-          </>
-        ) : (
-          <span className="account-email">Anonymous uploads expire in 365 days</span>
-        )}
-      </div>
-    </header>
-  );
+// ---------------------------------------------------------------------------
+// lifecycleColor – maps a share lifecycle_status to a HeroUI Chip color.
+// Values must match the LifecycleStatus union in src/shared/types.ts.
+// ---------------------------------------------------------------------------
+
+function lifecycleColor(status: string): "success" | "warning" | "danger" | "default" {
+  if (status === "active") return "success";
+  if (status === "needs_review") return "warning";
+  if (status === "blocked" || status === "deleted" || status === "failed") return "danger";
+  return "default";
 }
 
-function HomePage({ supabase, session, onOpenShare }: { supabase: SupabaseClient; session: Session | null; onOpenShare: (slug: string) => void }) {
+// ---------------------------------------------------------------------------
+// HomePage – index route component  /
+// ---------------------------------------------------------------------------
+
+export function HomePage() {
   return (
-    <div className="workspace">
-      <section className="upload-surface">
-        <div className="surface-copy">
-          <p className="eyebrow">Sandboxed HTML sharing</p>
-          <h1>Upload one HTML file. Share a live preview link.</h1>
-          <p className="surface-description">
-            Scripts can run, but every preview is isolated behind a sandbox and checked by a small risk scanner before it goes public.
+    <div className="flex flex-col gap-16">
+      {/* Hero section */}
+      <section className="hero-grid pt-12 pb-10 border-b border-border">
+        <div className="min-w-0">
+          <p className="text-xs font-semibold tracking-widest uppercase text-muted mb-3">
+            Sandboxed HTML sharing
+          </p>
+          <h1 className="text-4xl lg:text-5xl font-bold text-foreground leading-tight tracking-tight mb-5">
+            Upload one HTML file.<br />Share a live preview link.
+          </h1>
+          <p className="text-base text-muted leading-relaxed" style={{ maxWidth: "34rem" }}>
+            Scripts can run, but every preview is isolated behind a sandbox and checked by a small
+            risk scanner before it goes public.
           </p>
         </div>
-        <UploadPanel session={session} onOpenShare={onOpenShare} />
+        <div className="w-full">
+          <UploadPanel />
+        </div>
       </section>
 
-      <section className="lower-grid">
-        <AuthPanel supabase={supabase} session={session} />
-        <Dashboard session={session} onOpenShare={onOpenShare} />
+      {/* Lower grid: auth + dashboard */}
+      <section className="grid grid-cols-1 md:grid-cols-[minmax(0,0.7fr)_minmax(0,1fr)] gap-8 pb-12">
+        <AuthPanel />
+        <Dashboard />
       </section>
     </div>
   );
 }
 
-function UploadPanel({ session, onOpenShare }: { session: Session | null; onOpenShare: (slug: string) => void }) {
+// ---------------------------------------------------------------------------
+// SharePage – share route component  /s/$slug
+// ---------------------------------------------------------------------------
+
+export function SharePage() {
+  const { slug } = useParams({ from: "/s/$slug" });
+  const { session } = useSession();
+  const { data: share, isPending: isLoading, error } = usePublicShare(slug);
+  const reportMutation = useReportShare();
+
+  const [reportReason, setReportReason] = useState("phishing");
+  const [reportDetails, setReportDetails] = useState("");
+
+  const report = (event: FormEvent) => {
+    event.preventDefault();
+    if (!share) return;
+    reportMutation.mutate({
+      shareId: share.id,
+      reason: reportReason,
+      details: reportDetails,
+      accessToken: session?.access_token,
+    });
+  };
+
+  const reportFeedback = reportMutation.isSuccess
+    ? "Report received."
+    : reportMutation.isError
+    ? (reportMutation.error instanceof Error ? reportMutation.error.message : "Report failed.")
+    : "";
+
+  const statusMessage = isLoading
+    ? "Loading share..."
+    : error
+    ? error.message
+    : reportFeedback;
+
+  return (
+    <section className="flex flex-col gap-6 pt-8 border-t border-border">
+      {statusMessage && (
+        <p className={`text-sm ${error ? "text-danger" : "text-muted"}`} aria-live="polite">
+          {statusMessage}
+          {isLoading && <Spinner size="sm" color="current" className="ml-2 inline-block align-middle" />}
+        </p>
+      )}
+      {share && (
+        <>
+          <div className="flex flex-wrap items-end justify-between gap-4">
+            <div>
+              <p className="text-xs font-semibold tracking-widest uppercase text-muted mb-2">
+                Public unlisted share
+              </p>
+              <h1 className="text-3xl font-bold text-foreground tracking-tight mb-3">
+                {share.title || "Untitled HTML"}
+              </h1>
+              <div className="flex flex-wrap items-center gap-2">
+                <Chip
+                  color={lifecycleColor(share.lifecycle_status)}
+                  variant="soft"
+                  size="md"
+                >
+                  {share.lifecycle_status}
+                </Chip>
+                <span className="text-sm text-muted">
+                  risk {share.risk_score}
+                </span>
+                <span className="text-sm text-muted">
+                  {share.expires_at
+                    ? `expires ${new Date(share.expires_at).toLocaleDateString()}`
+                    : "no expiry"}
+                </span>
+              </div>
+            </div>
+            <a
+              className="button secondary"
+              href={share.preview_url}
+              target="_blank"
+              rel="noreferrer"
+            >
+              Full preview
+            </a>
+          </div>
+
+          {share.lifecycle_status === "active" || share.lifecycle_status === "needs_review" ? (
+            <div className="rounded-lg border border-border overflow-hidden bg-surface">
+              <iframe
+                className="preview-frame"
+                title={share.title || "Shared HTML preview"}
+                src={share.preview_url}
+                sandbox="allow-scripts allow-forms allow-popups allow-downloads"
+                referrerPolicy="no-referrer"
+              />
+            </div>
+          ) : (
+            <SystemNotice
+              title="Preview unavailable"
+              detail={`Current status: ${share.lifecycle_status}`}
+            />
+          )}
+
+          {/* Report strip */}
+          <div className="flex flex-wrap items-center gap-3 pt-2 border-t border-border">
+            <p className="text-xs text-muted">See something harmful?</p>
+            <form className="flex flex-wrap items-center gap-2" onSubmit={report}>
+              <select
+                className="text-sm border border-border rounded-md bg-surface text-foreground px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-accent"
+                value={reportReason}
+                onChange={(e) => setReportReason(e.target.value)}
+              >
+                <option value="phishing">Phishing</option>
+                <option value="malware">Malware</option>
+                <option value="copyright">Copyright</option>
+                <option value="other">Other</option>
+              </select>
+              <input
+                className="text-sm border border-border rounded-md bg-surface text-foreground px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-accent"
+                value={reportDetails}
+                onChange={(e) => setReportDetails(e.target.value)}
+                placeholder="Optional details"
+              />
+              <button className="button secondary" type="submit">Report</button>
+            </form>
+          </div>
+        </>
+      )}
+    </section>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// UploadPanel
+// ---------------------------------------------------------------------------
+
+function UploadPanel() {
+  const { session } = useSession();
+  const navigate = useNavigate();
+  const uploadMutation = useUploadShare();
+
   const [file, setFile] = useState<File | null>(null);
   const [title, setTitle] = useState("");
-  const [status, setStatus] = useState("");
-  const [result, setResult] = useState<UploadResult | null>(null);
-  const [feedbackKind, setFeedbackKind] = useState<"idle" | "working" | "success" | "error">("idle");
-  const [busy, setBusy] = useState(false);
+  const [validationError, setValidationError] = useState("");
+
+  const result = uploadMutation.data ?? null;
+  const busy = uploadMutation.isPending;
+
+  // Derive feedback kind and status message from mutation state.
+  const feedbackKind: "idle" | "working" | "success" | "error" = validationError
+    ? "error"
+    : busy
+    ? "working"
+    : uploadMutation.isSuccess
+    ? "success"
+    : uploadMutation.isError
+    ? "error"
+    : "idle";
+
+  const status = validationError
+    ? validationError
+    : busy
+    ? "Uploading and scanning..."
+    : uploadMutation.isSuccess
+    ? "Your share is live."
+    : uploadMutation.isError
+    ? (uploadMutation.error instanceof Error ? uploadMutation.error.message : "Upload failed")
+    : "";
 
   const submit = async (event: FormEvent) => {
     event.preventDefault();
     if (!file) {
-      setStatus("Choose an HTML file first.");
-      setFeedbackKind("error");
+      setValidationError("Choose an HTML file first.");
       return;
     }
-
-    setBusy(true);
-    setStatus("Uploading and scanning...");
-    setFeedbackKind("working");
-    setResult(null);
-
-    const body = new FormData();
-    body.set("file", file);
-    body.set("title", title);
-
-    try {
-      const response = await fetch("/api/shares", {
-        method: "POST",
-        headers: session?.access_token ? { authorization: `Bearer ${session.access_token}` } : undefined,
-        body
-      });
-      const payload = await response.json<UploadResult & ApiError>();
-      if (!response.ok) throw new Error(payload.error ?? "Upload failed");
-      setResult(payload);
-      setStatus("Your share is live.");
-      setFeedbackKind("success");
-    } catch (error) {
-      setStatus(error instanceof Error ? error.message : "Upload failed");
-      setFeedbackKind("error");
-    } finally {
-      setBusy(false);
-    }
+    setValidationError("");
+    uploadMutation.mutate({
+      file,
+      title,
+      accessToken: session?.access_token,
+    });
   };
 
+  const feedbackBg = {
+    idle: "",
+    working: "bg-warning/10 border-warning/40",
+    success: "bg-success/10 border-success/40",
+    error: "bg-danger/10 border-danger/40",
+  }[feedbackKind];
+
   return (
-    <form className="upload-panel" onSubmit={submit} aria-label="Upload an HTML file to share">
-      <label className="field">
+    <form
+      className="upload-panel flex flex-col gap-4 p-5 bg-surface border border-border rounded-lg"
+      onSubmit={submit}
+      aria-label="Upload an HTML file to share"
+    >
+      {/* Title field */}
+      <label className="flex flex-col gap-1.5 text-sm font-medium text-foreground">
         <span>Title</span>
-        <input value={title} onChange={(event) => setTitle(event.target.value)} placeholder="Tiny demo, receipt, prototype..." />
+        <input
+          className="border border-border rounded-md bg-surface-alt text-foreground px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-accent placeholder:text-muted"
+          value={title}
+          onChange={(e) => setTitle(e.target.value)}
+          placeholder="Tiny demo, receipt, prototype..."
+        />
       </label>
 
-      <label className="dropzone">
+      {/* Dropzone */}
+      <label className="dropzone flex flex-col items-center justify-center gap-2 min-h-[140px] border-2 border-dashed border-border rounded-lg bg-surface-alt cursor-pointer hover:border-accent/60 transition-colors p-5 text-center">
         <input
           type="file"
           accept=".html,.htm,text/html"
           aria-label="Choose an HTML file"
-          onChange={(event) => setFile(event.target.files?.[0] ?? null)}
+          onChange={(e) => setFile(e.target.files?.[0] ?? null)}
+          className="sr-only"
         />
-        <span className="dropzone-main">{file ? file.name : "Choose index.html"}</span>
-        <span className="dropzone-sub">{session ? "Up to 5 MB" : "Anonymous uploads up to 1 MB"}</span>
+        <span className={`font-mono text-sm font-semibold text-foreground overflow-wrap-anywhere ${file ? "text-foreground" : "text-muted"}`}>
+          {file ? file.name : "Choose index.html"}
+        </span>
+        <span className="text-xs text-muted">
+          {session ? "Up to 5 MB" : "Anonymous uploads up to 1 MB"}
+        </span>
       </label>
 
-      <button className="button primary" disabled={busy}>
+      {/* Primary action — one per view */}
+      <button
+        className="button primary w-full flex items-center justify-center gap-2"
+        disabled={busy}
+        type="submit"
+      >
+        {busy && <Spinner size="sm" color="current" />}
         {busy ? "Publishing..." : "Create share"}
       </button>
-      {status && (
-        <div className={`upload-feedback ${feedbackKind}`} aria-live="polite">
-          <strong>{feedbackTitle(feedbackKind)}</strong>
-          <span>{status}</span>
+
+      {/* Feedback */}
+      {status && feedbackKind !== "idle" && (
+        <div
+          className={`flex flex-col gap-1.5 rounded-md border px-4 py-3 text-sm ${feedbackBg}`}
+          aria-live="polite"
+        >
+          <strong className="font-semibold text-foreground">{feedbackTitle(feedbackKind)}</strong>
+          <span className="text-muted">{status}</span>
           {busy && (
-            <div className="publish-steps" aria-label="Publish progress">
+            <div className="publish-steps mt-1" aria-label="Publish progress">
               <span>Upload</span>
               <span>Scan</span>
               <span>Publish</span>
@@ -207,22 +356,37 @@ function UploadPanel({ session, onOpenShare }: { session: Session | null; onOpen
         </div>
       )}
 
+      {/* Result block */}
       {result && (
-        <div className="result-block">
-          <div className="result-heading">
+        <div className="result-block flex flex-col gap-4 pt-4 border-t border-border">
+          <div className="flex flex-wrap items-end justify-between gap-3">
             <div>
-              <p className="eyebrow">Published</p>
-              <h2>{result.share.title || "Untitled HTML"}</h2>
+              <p className="text-xs font-semibold tracking-widest uppercase text-muted mb-1">
+                Published
+              </p>
+              <h2 className="text-lg font-bold text-foreground">
+                {result.share.title || "Untitled HTML"}
+              </h2>
             </div>
-            <div className="result-actions">
-              <button type="button" className="button secondary" onClick={() => onOpenShare(result.share.slug)}>
+            <div className="flex items-center gap-2">
+              <Link
+                to="/s/$slug"
+                params={{ slug: result.share.slug }}
+                className="button secondary"
+              >
                 View page
-              </button>
-              <a className="button ghost" href={result.share.preview_url} target="_blank" rel="noreferrer">
+              </Link>
+              <a
+                className="button ghost"
+                href={result.share.preview_url}
+                target="_blank"
+                rel="noreferrer"
+              >
                 Full preview
               </a>
             </div>
           </div>
+
           <CopyLine
             label="Share URL"
             value={result.share.share_url}
@@ -250,7 +414,7 @@ function UploadPanel({ session, onOpenShare }: { session: Session | null; onOpen
             </>
           )}
           {result.share.risk_reasons.length > 0 && (
-            <ul className="risk-list">
+            <ul className="flex flex-col gap-1 pl-4 list-disc text-sm text-danger">
               {result.share.risk_reasons.map((reason) => (
                 <li key={reason.code}>{reason.detail}</li>
               ))}
@@ -262,18 +426,24 @@ function UploadPanel({ session, onOpenShare }: { session: Session | null; onOpen
   );
 }
 
-function AuthPanel({ supabase, session }: { supabase: SupabaseClient; session: Session | null }) {
+// ---------------------------------------------------------------------------
+// AuthPanel
+// ---------------------------------------------------------------------------
+
+function AuthPanel() {
+  const { session, supabase } = useSession();
   const [email, setEmail] = useState("");
   const [message, setMessage] = useState("");
   const [linkSent, setLinkSent] = useState(false);
 
   const signIn = async (event: FormEvent) => {
     event.preventDefault();
+    if (!supabase) return;
     setLinkSent(false);
     setMessage("Sending link...");
     const { error } = await supabase.auth.signInWithOtp({
       email,
-      options: { emailRedirectTo: window.location.origin }
+      options: { emailRedirectTo: window.location.origin },
     });
     if (error) {
       setMessage(error.message);
@@ -286,22 +456,33 @@ function AuthPanel({ supabase, session }: { supabase: SupabaseClient; session: S
   const mailboxUrl = getMailboxUrl(email);
 
   return (
-    <section className="panel">
-      <div className="panel-heading">
-        <p className="eyebrow">Account</p>
-        <h2>{session ? "Signed in" : "Keep your shares"}</h2>
+    <section className="flex flex-col gap-4 p-5 bg-surface border border-border rounded-lg">
+      <div>
+        <p className="text-xs font-semibold tracking-widest uppercase text-muted mb-1">Account</p>
+        <h2 className="text-xl font-bold text-foreground">
+          {session ? "Signed in" : "Keep your shares"}
+        </h2>
       </div>
       {session ? (
-        <p className="muted">Uploaded shares stay attached to this Supabase account until you delete them.</p>
+        <p className="text-sm text-muted">
+          Uploaded shares stay attached to this Supabase account until you delete them.
+        </p>
       ) : (
-        <form className="inline-form" onSubmit={signIn}>
-          <input value={email} onChange={(event) => setEmail(event.target.value)} type="email" placeholder="you@example.com" required />
-          <button className="button secondary">Send link</button>
+        <form className="flex flex-col gap-2" onSubmit={signIn}>
+          <input
+            className="border border-border rounded-md bg-surface-alt text-foreground px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-accent placeholder:text-muted"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            type="email"
+            placeholder="you@example.com"
+            required
+          />
+          <button className="button secondary" type="submit">Send link</button>
         </form>
       )}
       {message && (
-        <div className="mail-feedback">
-          <p className="status-line">{message}</p>
+        <div className="flex items-center justify-between gap-3 mt-1">
+          <p className="text-sm text-muted">{message}</p>
           {linkSent && mailboxUrl && (
             <a className="button ghost" href={mailboxUrl} target="_blank" rel="noreferrer">
               Open inbox
@@ -313,166 +494,142 @@ function AuthPanel({ supabase, session }: { supabase: SupabaseClient; session: S
   );
 }
 
-function Dashboard({ session, onOpenShare }: { session: Session | null; onOpenShare: (slug: string) => void }) {
-  const [shares, setShares] = useState<PublicShare[]>([]);
+// ---------------------------------------------------------------------------
+// Dashboard
+// ---------------------------------------------------------------------------
+
+function Dashboard() {
+  const { session } = useSession();
+  const { data: shares = [], error: sharesError } = useMyShares(session?.user.id, session?.access_token);
+  const deleteMutation = useDeleteShare();
+  const claimMutation = useClaimShare();
+  const navigate = useNavigate();
+
   const [claimToken, setClaimToken] = useState("");
   const [claimShareId, setClaimShareId] = useState("");
-  const [message, setMessage] = useState("");
-
-  const loadShares = async () => {
-    if (!session) return;
-    const response = await fetch("/api/shares", {
-      headers: { authorization: `Bearer ${session.access_token}` }
-    });
-    const payload = await response.json<{ shares?: PublicShare[] } & ApiError>();
-    if (response.ok) setShares(payload.shares ?? []);
-    else setMessage(payload.error ?? "Could not load shares");
-  };
-
-  useEffect(() => {
-    loadShares();
-  }, [session?.access_token]);
+  const [actionMessage, setActionMessage] = useState("");
 
   const deleteShare = async (id: string) => {
     if (!session) return;
-    const response = await fetch(`/api/shares/${id}`, {
-      method: "DELETE",
-      headers: { authorization: `Bearer ${session.access_token}` }
-    });
-    setMessage(response.ok ? "Deleted." : "Delete failed.");
-    await loadShares();
+    try {
+      await deleteMutation.mutateAsync({ id, accessToken: session.access_token });
+      setActionMessage("Deleted.");
+    } catch {
+      setActionMessage("Delete failed.");
+    }
   };
 
   const claim = async (event: FormEvent) => {
     event.preventDefault();
     if (!session) return;
-    const response = await fetch(`/api/shares/${claimShareId}/claim`, {
-      method: "POST",
-      headers: {
-        authorization: `Bearer ${session.access_token}`,
-        "content-type": "application/json"
-      },
-      body: JSON.stringify({ claimToken })
-    });
-    const payload = await response.json<ApiError>();
-    setMessage(response.ok ? "Claimed." : payload.error ?? "Claim failed.");
-    await loadShares();
+    try {
+      await claimMutation.mutateAsync({
+        shareId: claimShareId,
+        claimToken,
+        accessToken: session.access_token,
+      });
+      setActionMessage("Claimed.");
+      setClaimShareId("");
+      setClaimToken("");
+    } catch (error) {
+      setActionMessage(error instanceof Error ? error.message : "Claim failed.");
+    }
   };
 
   return (
-    <section className="panel">
-      <div className="panel-heading">
-        <p className="eyebrow">Library</p>
-        <h2>Your shares</h2>
+    <section className="flex flex-col gap-4 p-5 bg-surface border border-border rounded-lg">
+      <div>
+        <p className="text-xs font-semibold tracking-widest uppercase text-muted mb-1">Library</p>
+        <h2 className="text-xl font-bold text-foreground">Your shares</h2>
       </div>
       {!session ? (
-        <p className="muted">Sign in to keep shares, remove them later, or claim anonymous uploads.</p>
+        <p className="text-sm text-muted">
+          Sign in to keep shares, remove them later, or claim anonymous uploads.
+        </p>
       ) : (
         <>
-          <form className="claim-form" onSubmit={claim}>
-            <input value={claimShareId} onChange={(event) => setClaimShareId(event.target.value)} placeholder="Anonymous share id" />
-            <input value={claimToken} onChange={(event) => setClaimToken(event.target.value)} placeholder="Claim token" />
-            <button className="button secondary">Claim</button>
-          </form>
-          <div className="share-list">
-            {shares.length === 0 ? (
-              <p className="muted">No shares yet.</p>
-            ) : shares.map((share) => (
-              <article className="share-row" key={share.id}>
-                <div>
-                  <strong>{share.title || "Untitled HTML"}</strong>
-                  <span>{share.lifecycle_status} · {formatBytes(share.size_bytes)}</span>
-                </div>
-                <div className="row-actions">
-                  <button className="button ghost" onClick={() => onOpenShare(share.slug)}>Open</button>
-                  <button className="button ghost danger" onClick={() => deleteShare(share.id)}>Delete</button>
-                </div>
-              </article>
-            ))}
-          </div>
-        </>
-      )}
-      {message && <p className="status-line">{message}</p>}
-    </section>
-  );
-}
-
-function SharePage({ slug, session }: { slug: string; session: Session | null }) {
-  const [share, setShare] = useState<PublicShare | null>(null);
-  const [message, setMessage] = useState("Loading share...");
-  const [reportReason, setReportReason] = useState("phishing");
-  const [reportDetails, setReportDetails] = useState("");
-
-  useEffect(() => {
-    fetch(`/api/public/shares/${slug}`)
-      .then(async (response) => {
-        const payload = await response.json<{ share?: PublicShare } & ApiError>();
-        if (!response.ok || !payload.share) throw new Error(payload.error ?? "Share not found");
-        setShare(payload.share);
-        setMessage("");
-      })
-      .catch((error: Error) => setMessage(error.message));
-  }, [slug]);
-
-  const report = async (event: FormEvent) => {
-    event.preventDefault();
-    if (!share) return;
-    const response = await fetch(`/api/shares/${share.id}/report`, {
-      method: "POST",
-      headers: {
-        ...(session?.access_token ? { authorization: `Bearer ${session.access_token}` } : {}),
-        "content-type": "application/json"
-      },
-      body: JSON.stringify({ reason: reportReason, details: reportDetails })
-    });
-    setMessage(response.ok ? "Report received." : "Report failed.");
-  };
-
-  return (
-    <section className="share-page">
-      {message && <p className="status-line">{message}</p>}
-      {share && (
-        <>
-          <div className="share-header">
-            <div>
-              <p className="eyebrow">Public unlisted share</p>
-              <h1>{share.title || "Untitled HTML"}</h1>
-              <p className="muted">
-                {share.lifecycle_status} · risk {share.risk_score} · {share.expires_at ? `expires ${new Date(share.expires_at).toLocaleDateString()}` : "no expiry"}
-              </p>
-            </div>
-            <a className="button secondary" href={share.preview_url} target="_blank" rel="noreferrer">Full preview</a>
-          </div>
-
-          {share.lifecycle_status === "active" || share.lifecycle_status === "needs_review" ? (
-            <iframe
-              className="preview-frame"
-              title={share.title || "Shared HTML preview"}
-              src={share.preview_url}
-              sandbox="allow-scripts allow-forms allow-popups allow-downloads"
-              referrerPolicy="no-referrer"
+          {/* Claim form */}
+          <form className="flex flex-wrap items-center gap-2" onSubmit={claim}>
+            <input
+              className="flex-1 min-w-[120px] border border-border rounded-md bg-surface-alt text-foreground px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-accent placeholder:text-muted"
+              value={claimShareId}
+              onChange={(e) => setClaimShareId(e.target.value)}
+              placeholder="Anonymous share id"
             />
-          ) : (
-            <SystemNotice title="Preview unavailable" detail={`Current status: ${share.lifecycle_status}`} />
-          )}
-
-          <form className="report-strip" onSubmit={report}>
-            <select value={reportReason} onChange={(event) => setReportReason(event.target.value)}>
-              <option value="phishing">Phishing</option>
-              <option value="malware">Malware</option>
-              <option value="copyright">Copyright</option>
-              <option value="other">Other</option>
-            </select>
-            <input value={reportDetails} onChange={(event) => setReportDetails(event.target.value)} placeholder="Optional details" />
-            <button className="button secondary">Report</button>
+            <input
+              className="flex-1 min-w-[120px] border border-border rounded-md bg-surface-alt text-foreground px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-accent placeholder:text-muted"
+              value={claimToken}
+              onChange={(e) => setClaimToken(e.target.value)}
+              placeholder="Claim token"
+            />
+            <button className="button secondary" type="submit">Claim</button>
           </form>
+
+          {/* Share list */}
+          <div className="flex flex-col divide-y divide-border">
+            {shares.length === 0 ? (
+              <p className="text-sm text-muted py-2">No shares yet.</p>
+            ) : (
+              shares.map((share) => (
+                <article className="flex items-center justify-between gap-3 py-3" key={share.id}>
+                  <div className="flex flex-col gap-1 min-w-0">
+                    <strong className="text-sm font-semibold text-foreground truncate">
+                      {share.title || "Untitled HTML"}
+                    </strong>
+                    <div className="flex items-center gap-2">
+                      <Chip
+                        color={lifecycleColor(share.lifecycle_status)}
+                        variant="soft"
+                        size="md"
+                      >
+                        {share.lifecycle_status}
+                      </Chip>
+                      <span className="text-xs text-muted">{formatBytes(share.size_bytes)}</span>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2 flex-shrink-0">
+                    <button
+                      className="button ghost"
+                      onClick={() =>
+                        void navigate({ to: "/s/$slug", params: { slug: share.slug } })
+                      }
+                    >
+                      Open
+                    </button>
+                    <button
+                      className="button ghost danger"
+                      onClick={() => deleteShare(share.id)}
+                    >
+                      Delete
+                    </button>
+                  </div>
+                </article>
+              ))
+            )}
+          </div>
         </>
       )}
+      {sharesError && <p className="text-sm text-danger mt-1">{sharesError.message}</p>}
+      {actionMessage && <p className="text-sm text-muted mt-1">{actionMessage}</p>}
     </section>
   );
 }
 
-function CopyLine({ label, value, description, href }: { label: string; value: string; description?: string; href?: string }) {
+// ---------------------------------------------------------------------------
+// CopyLine – mono value with copy + open actions
+// ---------------------------------------------------------------------------
+
+function CopyLine({
+  label,
+  value,
+  description,
+  href,
+}: {
+  label: string;
+  value: string;
+  description?: string;
+  href?: string;
+}) {
   const [copied, setCopied] = useState(false);
   const copy = async () => {
     await navigator.clipboard.writeText(value);
@@ -481,15 +638,28 @@ function CopyLine({ label, value, description, href }: { label: string; value: s
   };
 
   return (
-    <div className="copy-line">
-      <span className="copy-meta">
-        <strong>{label}</strong>
-        {description && <small>{description}</small>}
-      </span>
-      <code>{value}</code>
-      <span className="copy-actions">
+    <div className="flex flex-col sm:flex-row sm:items-start gap-2 border border-border rounded-md bg-surface-alt px-3 py-2.5 text-sm">
+      {/* Label + description */}
+      <div className="flex flex-col gap-0.5 sm:w-32 shrink-0">
+        <strong className="font-semibold text-foreground">{label}</strong>
+        {description && (
+          <small className="text-xs text-muted leading-snug">{description}</small>
+        )}
+      </div>
+      {/* Mono value */}
+      <code className="flex-1 font-mono text-xs text-accent overflow-hidden text-ellipsis whitespace-nowrap min-w-0 self-center">
+        {value}
+      </code>
+      {/* Actions */}
+      <span className="flex items-center gap-1.5 shrink-0">
         {href && (
-          <a className="button ghost icon-button" href={href} target="_blank" rel="noreferrer" aria-label={`Open ${label}`}>
+          <a
+            className="button ghost icon-button"
+            href={href}
+            target="_blank"
+            rel="noreferrer"
+            aria-label={`Open ${label}`}
+          >
             <OpenIcon />
             Open
           </a>
@@ -503,21 +673,9 @@ function CopyLine({ label, value, description, href }: { label: string; value: s
   );
 }
 
-function LogoMark() {
-  return (
-    <span className="brand-mark" aria-hidden="true">
-      <img src="/logo.svg" alt="" />
-    </span>
-  );
-}
-
-function GitHubIcon() {
-  return (
-    <svg className="button-icon" viewBox="0 0 24 24" aria-hidden="true">
-      <path fill="currentColor" d="M12 2a10 10 0 0 0-3.16 19.49c.5.09.68-.22.68-.48v-1.7c-2.78.6-3.37-1.18-3.37-1.18-.45-1.16-1.1-1.47-1.1-1.47-.91-.62.07-.6.07-.6 1 .07 1.53 1.03 1.53 1.03.9 1.52 2.35 1.08 2.92.83.09-.64.35-1.08.63-1.33-2.22-.25-4.55-1.11-4.55-4.94 0-1.09.39-1.98 1.03-2.68-.1-.25-.45-1.27.1-2.64 0 0 .84-.27 2.75 1.02A9.48 9.48 0 0 1 12 7.01c.85 0 1.7.11 2.5.34 1.9-1.29 2.74-1.02 2.74-1.02.55 1.37.2 2.39.1 2.64.64.7 1.03 1.59 1.03 2.68 0 3.84-2.34 4.68-4.57 4.93.36.31.68.92.68 1.86v2.57c0 .26.18.57.69.48A10 10 0 0 0 12 2Z" />
-    </svg>
-  );
-}
+// ---------------------------------------------------------------------------
+// Icons
+// ---------------------------------------------------------------------------
 
 function OpenIcon() {
   return (
@@ -531,11 +689,21 @@ function OpenIcon() {
 function CopyIcon() {
   return (
     <svg className="button-icon" viewBox="0 0 24 24" aria-hidden="true">
-      <path fill="currentColor" d="M8 7a3 3 0 0 1 3-3h6a3 3 0 0 1 3 3v6a3 3 0 0 1-3 3v-2a1 1 0 0 0 1-1V7a1 1 0 0 0-1-1h-6a1 1 0 0 0-1 1H8Z" />
-      <path fill="currentColor" d="M4 11a3 3 0 0 1 3-3h6a3 3 0 0 1 3 3v6a3 3 0 0 1-3 3H7a3 3 0 0 1-3-3v-6Zm3-1a1 1 0 0 0-1 1v6a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1v-6a1 1 0 0 0-1-1H7Z" />
+      <path
+        fill="currentColor"
+        d="M8 7a3 3 0 0 1 3-3h6a3 3 0 0 1 3 3v6a3 3 0 0 1-3 3v-2a1 1 0 0 0 1-1V7a1 1 0 0 0-1-1h-6a1 1 0 0 0-1 1H8Z"
+      />
+      <path
+        fill="currentColor"
+        d="M4 11a3 3 0 0 1 3-3h6a3 3 0 0 1 3 3v6a3 3 0 0 1-3 3H7a3 3 0 0 1-3-3v-6Zm3-1a1 1 0 0 0-1 1v6a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1v-6a1 1 0 0 0-1-1H7Z"
+      />
     </svg>
   );
 }
+
+// ---------------------------------------------------------------------------
+// Utility helpers
+// ---------------------------------------------------------------------------
 
 function feedbackTitle(kind: "idle" | "working" | "success" | "error") {
   if (kind === "working") return "Preparing your share";
@@ -547,20 +715,14 @@ function feedbackTitle(kind: "idle" | "working" | "success" | "error") {
 function getMailboxUrl(email: string) {
   const domain = email.split("@")[1]?.toLowerCase();
   if (!domain) return "";
-  if (domain === "gmail.com" || domain === "googlemail.com") return "https://mail.google.com/mail/u/0/#inbox";
-  if (["outlook.com", "hotmail.com", "live.com", "msn.com"].includes(domain)) return "https://outlook.live.com/mail/0/inbox";
+  if (domain === "gmail.com" || domain === "googlemail.com")
+    return "https://mail.google.com/mail/u/0/#inbox";
+  if (["outlook.com", "hotmail.com", "live.com", "msn.com"].includes(domain))
+    return "https://outlook.live.com/mail/0/inbox";
   if (domain === "qq.com") return "https://mail.qq.com";
-  if (domain === "icloud.com" || domain === "me.com" || domain === "mac.com") return "https://www.icloud.com/mail";
+  if (domain === "icloud.com" || domain === "me.com" || domain === "mac.com")
+    return "https://www.icloud.com/mail";
   return "";
-}
-
-function SystemNotice({ title, detail }: { title: string; detail: string }) {
-  return (
-    <main className="system-notice">
-      <h1>{title}</h1>
-      <p>{detail}</p>
-    </main>
-  );
 }
 
 function formatBytes(value: number) {
@@ -569,4 +731,55 @@ function formatBytes(value: number) {
   return `${value} B`;
 }
 
-createRoot(document.getElementById("root")!).render(<App />);
+// ---------------------------------------------------------------------------
+// App shell
+// Loads config via useConfig() (TanStack Query), initialises Supabase,
+// attaches the auth listener, then renders the router inside SessionContext.
+// ---------------------------------------------------------------------------
+
+function App() {
+  const { data: config, error: configError } = useConfig();
+
+  const supabase = useMemo(() => {
+    if (!config) return null;
+    return createClient(config.supabaseUrl, config.supabasePublishableKey);
+  }, [config]);
+
+  const [session, setSession] = useState<Session | null>(null);
+
+  useEffect(() => {
+    if (!supabase) return;
+    // Hydrate existing session on mount
+    supabase.auth.getSession().then(({ data }) => setSession(data.session));
+    // Keep in sync on login / logout (reactive – useMyShares re-runs when
+    // session changes because its query key includes the access token)
+    const { data } = supabase.auth.onAuthStateChange((_event, nextSession) => {
+      setSession(nextSession);
+    });
+    return () => data.subscription.unsubscribe();
+  }, [supabase]);
+
+  if (configError)
+    return <SystemNotice title="Configuration error" detail={configError.message} />;
+  if (!config || !supabase)
+    return <SystemNotice title="Preparing app" detail="Loading Supabase configuration." />;
+
+  return (
+    <SessionContext.Provider value={{ session, supabase }}>
+      <RouterProvider router={router} />
+    </SessionContext.Provider>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Bootstrap – only runs in the browser (not during test module imports)
+// ---------------------------------------------------------------------------
+
+const rootEl = document.getElementById("root");
+if (rootEl) {
+  createRoot(rootEl).render(
+    <QueryClientProvider client={queryClient}>
+      <App />
+    </QueryClientProvider>
+  );
+}
