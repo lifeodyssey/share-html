@@ -62,6 +62,18 @@ export function SystemNotice({ title, detail }: { title: string; detail: string 
 }
 
 // ---------------------------------------------------------------------------
+// lifecycleColor – maps a share lifecycle_status to a HeroUI Chip color.
+// Values must match the LifecycleStatus union in src/shared/types.ts.
+// ---------------------------------------------------------------------------
+
+function lifecycleColor(status: string): "success" | "warning" | "danger" | "default" {
+  if (status === "active") return "success";
+  if (status === "needs_review") return "warning";
+  if (status === "blocked" || status === "deleted" || status === "failed") return "danger";
+  return "default";
+}
+
+// ---------------------------------------------------------------------------
 // HomePage – index route component  /
 // ---------------------------------------------------------------------------
 
@@ -131,13 +143,6 @@ export function SharePage() {
     : error
     ? error.message
     : reportFeedback;
-
-  const lifecycleColor = (status: string): "success" | "warning" | "danger" | "default" => {
-    if (status === "active") return "success";
-    if (status === "needs_review") return "warning";
-    if (status === "blocked" || status === "expired" || status === "removed") return "danger";
-    return "default";
-  };
 
   return (
     <section className="flex flex-col gap-6 pt-8 border-t border-border">
@@ -529,13 +534,6 @@ function Dashboard() {
     } catch (error) {
       setActionMessage(error instanceof Error ? error.message : "Claim failed.");
     }
-  };
-
-  const lifecycleColor = (status: string): "success" | "warning" | "danger" | "default" => {
-    if (status === "active") return "success";
-    if (status === "needs_review") return "warning";
-    if (status === "blocked" || status === "expired" || status === "removed") return "danger";
-    return "default";
   };
 
   return (
