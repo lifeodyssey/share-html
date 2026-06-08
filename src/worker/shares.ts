@@ -166,6 +166,9 @@ export async function createShareRecord(
       lifecycle_status: scan.lifecycle,
       moderation_status: scan.status
     });
+    if (!share) {
+      throw new Error(`scan-result update for share ${shareId} returned no row`);
+    }
 
     ctx.waitUntil(logShareEvent(env, shareId, user?.id ?? null, "created", ipHash, uaHash, { risk_score: scan.score }).catch(logBackgroundError));
 
@@ -193,13 +196,13 @@ export async function checkUploadRate(env: Env, user: AuthUser | null, ipHash: s
   if (user) {
     const limit = 100;
     const count = await countRecentUploadsByUser(env, user.id, since, limit);
-    if (count > limit) {
+    if (count >= limit) {
       return { allowed: false, reason: "User upload limit reached. Try again later." };
     }
   } else {
     const limit = 10;
     const count = await countRecentUploadsByIp(env, ipHash, since, limit);
-    if (count > limit) {
+    if (count >= limit) {
       return { allowed: false, reason: "Anonymous upload limit reached. Try again later." };
     }
   }

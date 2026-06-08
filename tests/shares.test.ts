@@ -168,6 +168,23 @@ test("checkUploadRate: returns allowed=false when anonymous count exceeds limit 
   assert.ok(result.reason?.includes("Anonymous upload limit"), `unexpected reason: ${result.reason}`);
 });
 
+test("checkUploadRate: blocks at exactly the anonymous limit (10 rows >= 10)", async () => {
+  // Boundary: 10 existing uploads means the 11th attempt must be blocked.
+  vi.stubGlobal("fetch", async () => supabaseOk(new Array(10).fill({ id: "x" })));
+  const env = makeEnv();
+  const result = await checkUploadRate(env, null, "ip-hash-value");
+  assert.equal(result.allowed, false);
+  assert.ok(result.reason?.includes("Anonymous upload limit"), `unexpected reason: ${result.reason}`);
+});
+
+test("checkUploadRate: allows just under the anonymous limit (9 rows < 10)", async () => {
+  // Boundary: 9 existing uploads still permits the 10th.
+  vi.stubGlobal("fetch", async () => supabaseOk(new Array(9).fill({ id: "x" })));
+  const env = makeEnv();
+  const result = await checkUploadRate(env, null, "ip-hash-value");
+  assert.equal(result.allowed, true);
+});
+
 test("checkUploadRate: returns allowed=true when user count is below user limit (100)", async () => {
   // Return 50 rows — under the user limit of 100
   vi.stubGlobal("fetch", async () => supabaseOk(new Array(50).fill({ id: "x" })));
@@ -180,6 +197,16 @@ test("checkUploadRate: returns allowed=true when user count is below user limit 
 test("checkUploadRate: returns allowed=false when user count exceeds user limit (101 rows > 100)", async () => {
   // Return 101 rows — over the user limit of 100
   vi.stubGlobal("fetch", async () => supabaseOk(new Array(101).fill({ id: "x" })));
+  const env = makeEnv();
+  const user = { id: "user-1", role: "user" as const, banned_at: null };
+  const result = await checkUploadRate(env, user, "ip-hash-value");
+  assert.equal(result.allowed, false);
+  assert.ok(result.reason?.includes("User upload limit"), `unexpected reason: ${result.reason}`);
+});
+
+test("checkUploadRate: blocks at exactly the user limit (100 rows >= 100)", async () => {
+  // Boundary: 100 existing uploads means the 101st attempt must be blocked.
+  vi.stubGlobal("fetch", async () => supabaseOk(new Array(100).fill({ id: "x" })));
   const env = makeEnv();
   const user = { id: "user-1", role: "user" as const, banned_at: null };
   const result = await checkUploadRate(env, user, "ip-hash-value");

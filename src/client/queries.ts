@@ -10,6 +10,7 @@
  */
 import {
   QueryClient,
+  skipToken,
   useMutation,
   useQuery,
   useQueryClient,
@@ -89,8 +90,9 @@ export function useMyShares(
 ) {
   return useQuery<PublicShare[], Error>({
     queryKey: queryKeys.myShares(userId ?? ""),
-    queryFn: () => listShares(accessToken!),
-    enabled: !!userId && !!accessToken,
+    // skipToken disables the query type-safely when either input is missing,
+    // so the queryFn only ever runs with a non-null accessToken (no `!`).
+    queryFn: userId && accessToken ? () => listShares(accessToken) : skipToken,
   });
 }
 
