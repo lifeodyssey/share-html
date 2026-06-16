@@ -47,8 +47,15 @@ async function expectOk<T>(res: Response, fallback: string): Promise<T> {
 /**
  * Fetches the client-side app configuration from the worker.
  * GET /api/config
+ *
+ * If the worker injected the config via a <script> tag (window.__APP_CONFIG__),
+ * that is used immediately without a network round-trip.
  */
 export async function fetchConfig(): Promise<AppConfig> {
+  const injected = (globalThis as Record<string, unknown>).__APP_CONFIG__ as AppConfig | undefined;
+  if (injected?.supabaseUrl && injected?.supabasePublishableKey) {
+    return injected;
+  }
   const response = await fetch("/api/config");
   if (!response.ok) throw new Error("Config unavailable");
   return response.json() as Promise<AppConfig>;
