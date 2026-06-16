@@ -140,13 +140,32 @@ export default {
         return await previewShare(request, env, ctx);
       }
 
-      return withDiscoveryHeaders(await env.ASSETS.fetch(request));
+      const assetResponse = await env.ASSETS.fetch(request);
+      const contentType = assetResponse.headers.get("content-type") ?? "";
+      if (contentType.includes("text/html") && request.method === "GET") {
+        return withDiscoveryHeaders(await injectConfig(assetResponse, env));
+      }
+      return withDiscoveryHeaders(assetResponse);
     } catch (error) {
       console.error(JSON.stringify({ event: "unhandled_error", message: errorMessage(error) }));
       return json({ error: "Internal server error" }, 500);
     }
   }
 };
+
+async function injectConfig(response: Response, env: Env): Promise<Response> {
+  const configScript = `<script>window.__APP_CONFIG__=${JSON.stringify({
+    supabaseUrl: env.SUPABASE_URL,
+    supabasePublishableKey: env.SUPABASE_PUBLISHABLE_KEY
+  })}</script>`;
+  const html = await response.text();
+  const injected = html.replace("</head>", `${configScript}</head>`);
+  return new Response(injected, {
+    status: response.status,
+    statusText: response.statusText,
+    headers: response.headers
+  });
+}
 
 function discoveryRoute(request: Request, url: URL): Response | null {
   if (request.method !== "GET" && request.method !== "HEAD") {
