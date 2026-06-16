@@ -153,6 +153,11 @@ export default {
   }
 };
 
+/**
+ * Injects the Supabase client config into an HTML response so the browser
+ * can initialise the Supabase client without a separate /api/config fetch.
+ * The injected script sets window.__APP_CONFIG__ before any module scripts run.
+ */
 async function injectConfig(response: Response, env: Env): Promise<Response> {
   const configScript = `<script>window.__APP_CONFIG__=${JSON.stringify({
     supabaseUrl: env.SUPABASE_URL,
