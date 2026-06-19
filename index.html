@@ -31,6 +31,7 @@
   </head>
   <body>
     <div id="root">
+      <!-- share-html:fallback:start -->
       <main>
         <h1>Share HTML — upload one HTML file, get a sandboxed shareable link</h1>
         <p>Upload a single self-contained HTML file and get a public, sandboxed preview URL. No signup required; anonymous uploads are kept for 365 days.</p>
@@ -39,6 +40,7 @@
 # returns JSON: { "share": { "share_url", "preview_url", "slug", "id" }, "claimToken" }</pre>
         <p>Full API: <a href="/openapi.json">/openapi.json</a> · AI guide: <a href="/llms.txt">/llms.txt</a> · MCP: <a href="/mcp">/mcp</a></p>
       </main>
+      <!-- share-html:fallback:end -->
     </div>
     <script>
       (() => {

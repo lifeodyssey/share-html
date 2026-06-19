@@ -143,7 +143,7 @@ export default {
       const assetResponse = await env.ASSETS.fetch(request);
       const contentType = assetResponse.headers.get("content-type") ?? "";
       if (contentType.includes("text/html") && request.method === "GET") {
-        return withDiscoveryHeaders(await injectConfig(assetResponse, env));
+        return withDiscoveryHeaders(await injectConfig(assetResponse, env, request));
       }
       return withDiscoveryHeaders(assetResponse);
     } catch (error) {
@@ -158,18 +158,50 @@ export default {
  * can initialise the Supabase client without a separate /api/config fetch.
  * The injected script sets window.__APP_CONFIG__ before any module scripts run.
  */
-async function injectConfig(response: Response, env: Env): Promise<Response> {
+async function injectConfig(response: Response, env: Env, request: Request): Promise<Response> {
   const configScript = `<script>window.__APP_CONFIG__=${JSON.stringify({
     supabaseUrl: env.SUPABASE_URL,
     supabasePublishableKey: env.SUPABASE_PUBLISHABLE_KEY
   })}</script>`;
   const html = await response.text();
-  const injected = html.replace("</head>", `${configScript}</head>`);
+  const bodyAdjusted = routeFallbackHtml(html, request);
+  const injected = bodyAdjusted.replace("</head>", `${configScript}</head>`);
   return new Response(injected, {
     status: response.status,
     statusText: response.statusText,
     headers: response.headers
   });
+}
+
+function routeFallbackHtml(html: string, request: Request): string {
+  const pathname = new URL(request.url).pathname;
+  if (!isShareRoute(pathname)) return html;
+  return replaceAppFallback(html, shareRouteFallback());
+}
+
+function isShareRoute(pathname: string): boolean {
+  return /^\/s\/[^/]+\/?$/.test(pathname);
+}
+
+function replaceAppFallback(html: string, replacement: string): string {
+  const startMarker = "<!-- share-html:fallback:start -->";
+  const endMarker = "<!-- share-html:fallback:end -->";
+  const start = html.indexOf(startMarker);
+  const end = html.indexOf(endMarker);
+  if (start === -1 || end === -1 || end < start) return html;
+
+  const contentStart = start + startMarker.length;
+  return `${html.slice(0, contentStart)}\n${replacement}\n      ${html.slice(end)}`;
+}
+
+function shareRouteFallback(): string {
+  return [
+    '      <main class="app-shell" aria-busy="true">',
+    '        <section class="flex flex-col gap-6 pt-8 border-t border-border">',
+    '          <p class="text-sm text-muted" aria-live="polite">Loading share...</p>',
+    "        </section>",
+    "      </main>",
+  ].join("\n");
 }
 
 function discoveryRoute(request: Request, url: URL): Response | null {
@@ -308,4 +340,3 @@ export type { AuthUser } from "./auth.ts";
 export { cleanTitle, sanitizeShortText, looksLikeHtml, isUploadFile, getClientIp, sha256Hex, hashText, base64Url, numberEnv, formatBytes, escapeHtml, errorMessage, logBackgroundError } from "./utils.ts";
 export { maxUploadBytes, appOrigin, previewOrigin } from "./config.ts";
 export { createShare, createShareRecord, checkUploadRate, listMyShares, getPublicShare, reportShare, claimShare, deleteShare, listReports, moderateShare, previewShare, previewHeaders, previewMessage } from "./shares.ts";
-
