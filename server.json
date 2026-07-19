@@ -11,7 +11,7 @@
   "remotes": [
     {
       "type": "streamable-http",
-      "url": "https://sharehtml.zhenjia.dev/mcp"
+      "url": "https://share-html.zhenjiazhou0127.workers.dev/mcp"
     }
   ]
 }

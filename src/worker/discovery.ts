@@ -1,4 +1,4 @@
-import { SITE_ORIGIN, SUPABASE_AUTH_ISSUER } from "./constants.ts";
+import { MCP_ENDPOINT, SITE_ORIGIN, SUPABASE_AUTH_ISSUER } from "./constants.ts";
 import { INDEXABLE_PATHS } from "../shared/marketing.ts";
 
 export function robotsTxt(): string {
@@ -182,7 +182,7 @@ export function mcpServerCard() {
       version: "0.1.0"
     },
     description: "Create public-unlisted or access-key-protected private previews and read public share metadata through MCP. Private creation returns the access key once.",
-    url: `${SITE_ORIGIN}/mcp`,
+    url: MCP_ENDPOINT,
     transport: {
       type: "streamable-http",
       protocolVersion: "2025-11-25"
@@ -207,7 +207,7 @@ export function mcpRegistryManifest() {
     remotes: [
       {
         type: "streamable-http",
-        url: SITE_ORIGIN + "/mcp",
+        url: MCP_ENDPOINT,
       },
     ],
   };

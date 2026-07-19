@@ -18,6 +18,8 @@ jobs:
     runs-on: ubuntu-latest
     environment: production
     timeout-minutes: 10
+    env:
+      MCP_MACHINE_ORIGIN: https://share-html.zhenjiazhou0127.workers.dev
 
     steps:
       - name: Check out repository
@@ -41,19 +43,19 @@ jobs:
           curl "${curl_args[@]}" \
             --header 'accept: application/json' \
             --output /tmp/production-server.json \
-            https://sharehtml.zhenjia.dev/server.json
+            "$MCP_MACHINE_ORIGIN/server.json"
           jq -e --slurp '.[0] == .[1]' server.json /tmp/production-server.json
 
           expected_version="$(jq -r '.version' server.json)"
           echo 'Verifying production MCP initialize'
-          curl "${curl_args[@]}" https://sharehtml.zhenjia.dev/mcp \
+          curl "${curl_args[@]}" "$MCP_MACHINE_ORIGIN/mcp" \
             -H 'accept: application/json' \
             -H 'content-type: application/json' \
             -H 'mcp-protocol-version: 2025-11-25' \
             --data '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{}}' \
             | jq -e --arg expected_version "$expected_version" '.result.serverInfo.version == $expected_version'
           echo 'Verifying production MCP tools/list'
-          curl "${curl_args[@]}" https://sharehtml.zhenjia.dev/mcp \
+          curl "${curl_args[@]}" "$MCP_MACHINE_ORIGIN/mcp" \
             -H 'accept: application/json' \
             -H 'content-type: application/json' \
             -H 'mcp-protocol-version: 2025-11-25' \

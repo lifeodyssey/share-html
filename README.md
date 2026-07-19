@@ -106,7 +106,7 @@ Share HTML is built to be discoverable and usable by AI agents, not just humans:
 
 - **`llms.txt`** — AI-readable site guide (also served from `/` when the request sends `Accept: text/markdown`).
 - **`openapi.json`** — machine-readable HTTP API description, including both visibility modes and the private unlock/cookie flow. The homepage HTML also embeds static content + JSON-LD so non-JS agents can read what the site is and how to call it.
-- **`/mcp`** — MCP (JSON-RPC) endpoint exposing `describe_share_html`, `get_public_share`, and `create_share`. The page exposes the same tools in-browser via WebMCP (`navigator.modelContext`).
+- **MCP machine endpoint** — [`https://share-html.zhenjiazhou0127.workers.dev/mcp`](https://share-html.zhenjiazhou0127.workers.dev/mcp) exposes `describe_share_html`, `get_public_share`, and `create_share`. It uses the same production Worker as the branded site while avoiding zone-level browser-bot policy on machine-to-machine traffic. The page exposes the same tools in-browser via WebMCP (`navigator.modelContext`).
 - **`/a2a`** — A2A 1.0 JSON-RPC endpoint with an implemented `describe_share_html` skill; its card intentionally advertises only that executable A2A capability.
 - **WebMCP `create_share`** lets an agent choose `public_unlisted` or `private_link`; **`access_private_share`** exchanges an access key for metadata plus the scoped metadata and preview grants. Both run through the normal HTTP API.
 - **MCP `create_share`** supports both `public_unlisted` and `private_link`. It runs through the **same anonymous rate limit and risk scanner** as the web upload — there is no bypass path, and private creation returns its key once.
@@ -125,7 +125,7 @@ The product now has four crawlable, first-party entry pages rather than relying 
 
 Only these pages and the homepage are submitted in `sitemap.xml`. Uploaded `/s/:slug` and `/v/:slug/` URLs remain noindex and are excluded from every discovery submission. Wrapper pages include a visible “Share your HTML” CTA; its `source=shared_preview` value is stored only in the existing `created` event metadata alongside `visibility`, which makes product-led activation measurable without adding a new tracking service.
 
-The official MCP Registry publish descriptor is [`server.json`](./server.json). The manual `Publish MCP Registry metadata` workflow verifies the live manifest and MCP tool list before publishing with GitHub OIDC. Registry entries currently cannot be unpublished, so the workflow requires typing `publish` and must only be dispatched after the production endpoint is verified.
+The official MCP Registry publish descriptor is [`server.json`](./server.json). Its remote points to the production `workers.dev` machine endpoint; human-facing pages and canonical URLs remain on `sharehtml.zhenjia.dev`. This split prevents Free-plan Bot Fight Mode on the branded zone from rejecting legitimate data-center MCP clients. The manual `Publish MCP Registry metadata` workflow verifies the live manifest and MCP tool list before publishing with GitHub OIDC. Registry entries currently cannot be unpublished, so the workflow requires typing `publish` and must only be dispatched after the production endpoint is verified.
 
 IndexNow uses an explicit first-party allowlist rather than Cloudflare Crawler Hints, because this hostname also serves private and unlisted URLs:
 
