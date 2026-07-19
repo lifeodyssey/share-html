@@ -326,11 +326,33 @@ test("mcpRegistryManifest: matches the publishable remote-only server.json", () 
   const manifest = mcpRegistryManifest();
   const file = JSON.parse(readFileSync(new URL("../server.json", import.meta.url), "utf8"));
   assert.deepEqual(manifest, file);
+  assert.equal(manifest.name, "dev.zhenjia/share-html");
+  assert.equal(manifest.websiteUrl, `${SITE_ORIGIN}/agents`);
   assert.deepEqual(manifest.remotes, [{
     type: "streamable-http",
     url: MCP_ENDPOINT,
   }]);
   assert.ok(!("packages" in manifest));
+});
+
+test("MCP Registry workflow publishes the branded identity before deprecating the legacy identity", () => {
+  const workflow = readFileSync(
+    new URL("../.github/workflows/publish-mcp.yml", import.meta.url),
+    "utf8"
+  );
+  const publishIndex = workflow.indexOf("./mcp-publisher publish");
+  const deprecateIndex = workflow.indexOf("./mcp-publisher status");
+
+  assert.ok(workflow.includes("MCP_REGISTRY_NAME: dev.zhenjia/share-html"));
+  assert.ok(workflow.includes("MCP_REGISTRY_DOMAIN: zhenjia.dev"));
+  assert.ok(workflow.includes("secrets.MCP_REGISTRY_PRIVATE_KEY"));
+  assert.ok(workflow.includes("login dns"));
+  assert.ok(workflow.includes("io.github.lifeodyssey/share-html"));
+  assert.ok(workflow.includes("Moved to dev.zhenjia/share-html"));
+  assert.ok(workflow.includes("--yes"));
+  assert.equal(workflow.match(/include_deleted=true/g)?.length, 3);
+  assert.ok(publishIndex >= 0, "expected branded publish command");
+  assert.ok(deprecateIndex > publishIndex, "legacy deprecation must happen after branded publish");
 });
 
 test("mcpServerCard: advertises the bot-policy-independent machine endpoint", () => {

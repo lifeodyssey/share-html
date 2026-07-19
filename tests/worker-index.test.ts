@@ -177,7 +177,7 @@ test("worker fetch: serves the MCP Registry manifest and an env-bound IndexNow k
     makeCtx()
   );
   assert.equal(manifest.status, 200);
-  assert.equal((await manifest.json() as any).name, "io.github.lifeodyssey/share-html");
+  assert.equal((await manifest.json() as any).name, "dev.zhenjia/share-html");
 
   const key = await worker.fetch(
     new Request("https://sharehtml.zhenjia.dev/IndexNowKey-12345678.txt"),
