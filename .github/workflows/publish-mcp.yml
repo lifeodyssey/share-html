@@ -25,18 +25,36 @@ jobs:
 
       - name: Verify the production manifest and MCP tools
         run: |
-          curl --fail --show-error --silent \
+          curl_args=(
+            --fail-with-body
+            --show-error
+            --silent
+            --retry 4
+            --retry-all-errors
+            --retry-delay 2
+            --connect-timeout 10
+            --max-time 30
+            --user-agent 'ShareHTML-MCP-Publisher/0.1 (+https://github.com/lifeodyssey/share-html)'
+          )
+
+          echo 'Verifying production server.json'
+          curl "${curl_args[@]}" \
+            --header 'accept: application/json' \
             --output /tmp/production-server.json \
             https://sharehtml.zhenjia.dev/server.json
           jq -e --slurp '.[0] == .[1]' server.json /tmp/production-server.json
 
           expected_version="$(jq -r '.version' server.json)"
-          curl --fail --show-error --silent https://sharehtml.zhenjia.dev/mcp \
+          echo 'Verifying production MCP initialize'
+          curl "${curl_args[@]}" https://sharehtml.zhenjia.dev/mcp \
+            -H 'accept: application/json' \
             -H 'content-type: application/json' \
             -H 'mcp-protocol-version: 2025-11-25' \
             --data '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{}}' \
             | jq -e --arg expected_version "$expected_version" '.result.serverInfo.version == $expected_version'
-          curl --fail --show-error --silent https://sharehtml.zhenjia.dev/mcp \
+          echo 'Verifying production MCP tools/list'
+          curl "${curl_args[@]}" https://sharehtml.zhenjia.dev/mcp \
+            -H 'accept: application/json' \
             -H 'content-type: application/json' \
             -H 'mcp-protocol-version: 2025-11-25' \
             --data '{"jsonrpc":"2.0","id":1,"method":"tools/list","params":{}}' \
