@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
     inputs:
       confirm_publish:
-        description: "Registry entries cannot currently be unpublished. Type publish to continue."
+        description: "Type publish-dev-zhenjia to publish the branded entry and deprecate the legacy entry."
         required: true
         type: string
 
@@ -14,12 +14,16 @@ permissions:
 
 jobs:
   publish:
-    if: ${{ github.ref == 'refs/heads/main' && inputs.confirm_publish == 'publish' }}
+    if: ${{ github.ref == 'refs/heads/main' && inputs.confirm_publish == 'publish-dev-zhenjia' }}
     runs-on: ubuntu-latest
     environment: production
     timeout-minutes: 10
     env:
       MCP_MACHINE_ORIGIN: https://share-html.zhenjiazhou0127.workers.dev
+      MCP_REGISTRY_DOMAIN: zhenjia.dev
+      MCP_REGISTRY_NAME: dev.zhenjia/share-html
+      MCP_LEGACY_REGISTRY_NAME: io.github.lifeodyssey/share-html
+      MCP_REGISTRY_API: https://registry.modelcontextprotocol.io/v0.1/servers
 
     steps:
       - name: Check out repository
@@ -38,6 +42,9 @@ jobs:
             --max-time 30
             --user-agent 'ShareHTML-MCP-Publisher/0.1 (+https://github.com/lifeodyssey/share-html)'
           )
+
+          jq -e --arg expected_name "$MCP_REGISTRY_NAME" \
+            '.name == $expected_name' server.json
 
           echo 'Verifying production server.json'
           curl "${curl_args[@]}" \
@@ -69,14 +76,116 @@ jobs:
           echo 'ab128162b0616090b47cf245afe0a23f3ef08936fdce19074f5ba0a4469281ac  /tmp/mcp-publisher.tar.gz' | sha256sum --check
           tar -xzf /tmp/mcp-publisher.tar.gz mcp-publisher
 
-      - name: Authenticate with GitHub OIDC
-        run: ./mcp-publisher login github-oidc
+      - name: Inspect branded Registry state
+        id: branded_state
+        run: |
+          expected_version="$(jq -r '.version' server.json)"
+          curl --fail --show-error --silent --get \
+            --data-urlencode "search=$MCP_REGISTRY_NAME" \
+            --data 'include_deleted=true' \
+            --output /tmp/branded-before.json \
+            "$MCP_REGISTRY_API"
 
-      - name: Publish remote server metadata
+          matching_count="$(jq --arg name "$MCP_REGISTRY_NAME" --arg version "$expected_version" \
+            '[.servers[] | select(.server.name == $name and .server.version == $version)] | length' \
+            /tmp/branded-before.json)"
+          if [[ "$matching_count" == "0" ]]; then
+            echo 'already_published=false' >> "$GITHUB_OUTPUT"
+          elif jq -e --arg name "$MCP_REGISTRY_NAME" --arg version "$expected_version" '
+            [.servers[] | select(.server.name == $name and .server.version == $version)]
+            | length == 1
+              and .[0]._meta["io.modelcontextprotocol.registry/official"].status == "active"
+          ' /tmp/branded-before.json; then
+            echo 'Branded version is already active; continuing with migration verification.'
+            echo 'already_published=true' >> "$GITHUB_OUTPUT"
+          else
+            echo '::error::The branded name/version exists but is not a single active entry.'
+            exit 1
+          fi
+
+      - name: Authenticate the branded DNS namespace
+        if: ${{ steps.branded_state.outputs.already_published != 'true' }}
+        env:
+          MCP_REGISTRY_PRIVATE_KEY: ${{ secrets.MCP_REGISTRY_PRIVATE_KEY }}
+        run: |
+          if [[ ! "$MCP_REGISTRY_PRIVATE_KEY" =~ ^[0-9A-Fa-f]{64}$ ]]; then
+            echo '::error::MCP_REGISTRY_PRIVATE_KEY must be a 64-character Ed25519 private key in hexadecimal form.'
+            exit 1
+          fi
+          ./mcp-publisher login dns \
+            --domain "$MCP_REGISTRY_DOMAIN" \
+            --private-key "$MCP_REGISTRY_PRIVATE_KEY"
+
+      - name: Publish the branded remote server metadata
+        if: ${{ steps.branded_state.outputs.already_published != 'true' }}
         run: ./mcp-publisher publish
 
-      - name: Verify registry discovery
+      - name: Verify branded Registry discovery
         run: |
-          curl --fail --show-error --silent \
-            'https://registry.modelcontextprotocol.io/v0.1/servers?search=io.github.lifeodyssey/share-html' \
-            | jq -e '.servers | length > 0'
+          expected_version="$(jq -r '.version' server.json)"
+          expected_remote="$(jq -r '.remotes[0].url' server.json)"
+          curl --fail --show-error --silent --get \
+            --data-urlencode "search=$MCP_REGISTRY_NAME" \
+            --output /tmp/branded-after.json \
+            "$MCP_REGISTRY_API"
+          jq -e --arg name "$MCP_REGISTRY_NAME" \
+            --arg version "$expected_version" \
+            --arg remote "$expected_remote" '
+            [.servers[] | select(.server.name == $name and .server.version == $version)]
+            | length == 1
+              and .[0].server.remotes == [{"type":"streamable-http","url":$remote}]
+              and .[0]._meta["io.modelcontextprotocol.registry/official"].status == "active"
+              and .[0]._meta["io.modelcontextprotocol.registry/official"].isLatest == true
+          ' /tmp/branded-after.json
+
+      - name: Inspect legacy Registry state
+        id: legacy_state
+        run: |
+          curl --fail --show-error --silent --get \
+            --data-urlencode "search=$MCP_LEGACY_REGISTRY_NAME" \
+            --data 'include_deleted=true' \
+            --output /tmp/legacy-before.json \
+            "$MCP_REGISTRY_API"
+          if jq -e --arg name "$MCP_LEGACY_REGISTRY_NAME" '
+            [.servers[] | select(.server.name == $name)]
+            | length == 0
+              or all(
+                ._meta["io.modelcontextprotocol.registry/official"].status == "deprecated"
+                or ._meta["io.modelcontextprotocol.registry/official"].status == "deleted"
+              )
+          ' /tmp/legacy-before.json; then
+            echo 'Legacy entry is already migrated.'
+            echo 'already_migrated=true' >> "$GITHUB_OUTPUT"
+          else
+            echo 'already_migrated=false' >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Authenticate the legacy GitHub namespace
+        if: ${{ steps.legacy_state.outputs.already_migrated != 'true' }}
+        run: ./mcp-publisher login github-oidc
+
+      - name: Deprecate the legacy Registry identity
+        if: ${{ steps.legacy_state.outputs.already_migrated != 'true' }}
+        run: |
+          ./mcp-publisher status \
+            --status deprecated \
+            --all-versions \
+            --message "Moved to dev.zhenjia/share-html" \
+            --yes \
+            "$MCP_LEGACY_REGISTRY_NAME"
+
+      - name: Verify the legacy identity is no longer active
+        run: |
+          curl --fail --show-error --silent --get \
+            --data-urlencode "search=$MCP_LEGACY_REGISTRY_NAME" \
+            --data 'include_deleted=true' \
+            --output /tmp/legacy-after.json \
+            "$MCP_REGISTRY_API"
+          jq -e --arg name "$MCP_LEGACY_REGISTRY_NAME" '
+            [.servers[] | select(.server.name == $name)]
+            | length > 0
+              and all(
+                ._meta["io.modelcontextprotocol.registry/official"].status == "deprecated"
+                or ._meta["io.modelcontextprotocol.registry/official"].status == "deleted"
+              )
+          ' /tmp/legacy-after.json

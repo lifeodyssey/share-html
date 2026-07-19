@@ -196,7 +196,7 @@ export function mcpServerCard() {
 export function mcpRegistryManifest() {
   return {
     $schema: "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
-    name: "io.github.lifeodyssey/share-html",
+    name: "dev.zhenjia/share-html",
     title: "Share HTML",
     description: "Create sandboxed public-unlisted or access-key-protected HTML previews through a remote MCP server.",
     version: "0.1.0",
@@ -204,6 +204,7 @@ export function mcpRegistryManifest() {
       url: "https://github.com/lifeodyssey/share-html",
       source: "github",
     },
+    websiteUrl: `${SITE_ORIGIN}/agents`,
     remotes: [
       {
         type: "streamable-http",
