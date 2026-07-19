@@ -2,10 +2,11 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { test } from "vitest";
 
-import { LLMS_TXT, SHARE_HTML_SKILL, SITE_ORIGIN } from "../src/worker/constants.ts";
+import { LLMS_TXT, MCP_ENDPOINT, SHARE_HTML_SKILL, SITE_ORIGIN } from "../src/worker/constants.ts";
 import {
   a2aAgentCard,
   authMarkdown,
+  mcpServerCard,
   oauthAuthorizationServer,
   openApiDocument,
   mcpRegistryManifest,
@@ -274,6 +275,7 @@ test("llms.txt: distinguishes link access from ownership and pins private errors
   assert.ok(LLMS_TXT.includes("noindex"));
   assert.ok(LLMS_TXT.includes("metadata"));
   assert.ok(LLMS_TXT.includes("exact unlock endpoint"));
+  assert.ok(LLMS_TXT.includes(MCP_ENDPOINT));
 });
 
 test("agent skill: documents the private unlock route and secret URL fragment", () => {
@@ -326,9 +328,13 @@ test("mcpRegistryManifest: matches the publishable remote-only server.json", () 
   assert.deepEqual(manifest, file);
   assert.deepEqual(manifest.remotes, [{
     type: "streamable-http",
-    url: `${SITE_ORIGIN}/mcp`,
+    url: MCP_ENDPOINT,
   }]);
   assert.ok(!("packages" in manifest));
+});
+
+test("mcpServerCard: advertises the bot-policy-independent machine endpoint", () => {
+  assert.equal(mcpServerCard().url, MCP_ENDPOINT);
 });
 
 // ---------------------------------------------------------------------------

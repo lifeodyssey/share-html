@@ -1,3 +1,5 @@
+import { MCP_ENDPOINT } from "./origins.ts";
+
 export type MarketingLink = {
   label: string;
   href: string;
@@ -167,7 +169,7 @@ export const MARKETING_PAGES: MarketingPage[] = [
         paragraphs: [
           "Connect a Streamable HTTP MCP client to the endpoint below. The server exposes describe_share_html, create_share, and get_public_share. The create tool accepts the full HTML string and an optional title and visibility.",
         ],
-        code: "https://sharehtml.zhenjia.dev/mcp",
+        code: MCP_ENDPOINT,
         links: [
           { label: "MCP server card", href: "/.well-known/mcp/server-card.json" },
           { label: "Registry manifest", href: "/server.json" },
@@ -178,7 +180,7 @@ export const MARKETING_PAGES: MarketingPage[] = [
         paragraphs: [
           "Send initialize first, then call tools/list or tools/call using the negotiated protocol version. No bearer token is needed for anonymous creation.",
         ],
-        code: "curl https://sharehtml.zhenjia.dev/mcp \\\n  -H 'content-type: application/json' \\\n  -H 'mcp-protocol-version: 2025-11-25' \\\n  --data '{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"tools/list\",\"params\":{}}'",
+        code: "curl https://share-html.zhenjiazhou0127.workers.dev/mcp \\\n  -H 'content-type: application/json' \\\n  -H 'mcp-protocol-version: 2025-11-25' \\\n  --data '{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"tools/list\",\"params\":{}}'",
       },
       {
         title: "Choose the integration surface",

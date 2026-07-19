@@ -1,4 +1,6 @@
-export const SITE_ORIGIN = "https://sharehtml.zhenjia.dev";
+import { MCP_ENDPOINT, SITE_ORIGIN } from "../shared/origins.ts";
+
+export { MCP_ENDPOINT, SITE_ORIGIN };
 export const SUPABASE_AUTH_ISSUER = "https://hihvtuyweqxnsmqmegdt.supabase.co/auth/v1";
 export const FIRST_PARTY_CONTENT_SIGNAL = "search=yes, ai-input=yes, ai-train=no, use=reference";
 export const USER_CONTENT_SIGNAL = "search=no, ai-input=no, ai-train=no, use=immediate";
@@ -49,6 +51,7 @@ Share HTML is a Cloudflare-hosted tool for uploading one self-contained HTML fil
 - API catalog: ${SITE_ORIGIN}/.well-known/api-catalog
 - OpenAPI description: ${SITE_ORIGIN}/openapi.json
 - A2A service guide endpoint: POST ${SITE_ORIGIN}/a2a
+- Remote MCP endpoint: POST ${MCP_ENDPOINT}
 
 ## Create a Share
 

@@ -47,6 +47,7 @@ vi.mock("../../src/client/api.ts", () => ({
 import * as api from "../../src/client/api.ts";
 import { HomePage, MarketingPageView, SharePage } from "../../src/client/main";
 import { SessionContext, type SessionCtxValue } from "../../src/client/session";
+import { MCP_ENDPOINT } from "../../src/shared/origins.ts";
 import type { PublicShare } from "../../src/shared/types";
 
 // ---------------------------------------------------------------------------
@@ -698,7 +699,7 @@ describe("MarketingPageView", () => {
     render(<MarketingPageView path="/agents" />);
 
     expect(screen.getByRole("heading", { name: /give an agent html/i })).toBeDefined();
-    expect(screen.getByText("https://sharehtml.zhenjia.dev/mcp")).toBeDefined();
+    expect(screen.getByText(MCP_ENDPOINT)).toBeDefined();
     expect(screen.getByRole("link", { name: /upload html/i }).getAttribute("href"))
       .toBe("/?source=agents");
   });
