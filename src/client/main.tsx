@@ -20,6 +20,7 @@ import React, {
   FormEvent,
   useEffect,
   useMemo,
+  useRef,
   useState,
 } from "react";
 import { createRoot } from "react-dom/client";
@@ -35,16 +36,106 @@ import { queryClient } from "./queries";
 import {
   useConfig,
   useMyShares,
-  usePublicShare,
+  useShareAccess,
   useUploadShare,
   useDeleteShare,
   useClaimShare,
   useReportShare,
+  useRotateShareAccessKey,
 } from "./queries";
+import type { RotateAccessKeyResult } from "./api";
+import type { ShareVisibility } from "../shared/types";
+import {
+  exampleTemplateById,
+  marketingPageForPath,
+  type MarketingPage,
+} from "../shared/marketing";
 import { SessionContext, useSession } from "./session";
 import { router } from "./router";
 import "./theme.css";
 import "./styles.css";
+
+const PUBLIC_SITE_ORIGIN = "https://sharehtml.zhenjia.dev";
+const HOME_TITLE = "Share HTML — Upload and Share Sandboxed HTML Previews";
+const HOME_DESCRIPTION = "Upload one self-contained HTML file and share it in a sandboxed preview with an unlisted public link or an access-key-protected private link.";
+
+type PageMetadata = {
+  title: string;
+  description: string;
+  canonicalPath: string | null;
+  index: boolean;
+  ogType?: "website" | "article";
+  schema?: unknown | null;
+};
+
+function upsertMeta(attribute: "name" | "property", key: string, content: string) {
+  let element = document.head.querySelector<HTMLMetaElement>(`meta[${attribute}="${key}"]`);
+  if (!element) {
+    element = document.createElement("meta");
+    element.setAttribute(attribute, key);
+    document.head.appendChild(element);
+  }
+  element.content = content;
+}
+
+function removeMeta(attribute: "name" | "property", key: string) {
+  document.head.querySelectorAll(`meta[${attribute}="${key}"]`).forEach((element) => element.remove());
+}
+
+function usePageMetadata({
+  title,
+  description,
+  canonicalPath,
+  index,
+  ogType = "website",
+  schema = null,
+}: PageMetadata) {
+  const schemaJson = schema ? JSON.stringify(schema) : null;
+
+  useEffect(() => {
+    document.title = title;
+    upsertMeta("name", "description", description);
+    upsertMeta(
+      "name",
+      "robots",
+      index ? "index, follow, max-image-preview:large" : "noindex, nofollow, noarchive, nosnippet, noimageindex"
+    );
+    upsertMeta("property", "og:type", ogType);
+    upsertMeta("property", "og:title", title);
+    upsertMeta("property", "og:description", description);
+    upsertMeta("name", "twitter:title", title);
+    upsertMeta("name", "twitter:description", description);
+
+    const canonicalUrl = canonicalPath === null
+      ? null
+      : new URL(canonicalPath, PUBLIC_SITE_ORIGIN).toString();
+    let canonical = document.head.querySelector<HTMLLinkElement>('link[rel="canonical"]');
+    if (canonicalUrl) {
+      if (!canonical) {
+        canonical = document.createElement("link");
+        canonical.rel = "canonical";
+        document.head.appendChild(canonical);
+      }
+      canonical.href = canonicalUrl;
+      upsertMeta("property", "og:url", canonicalUrl);
+    } else {
+      canonical?.remove();
+      removeMeta("property", "og:url");
+    }
+
+    const schemas = [...document.head.querySelectorAll<HTMLScriptElement>('script[type="application/ld+json"]')];
+    if (schemaJson) {
+      const script = schemas.shift() ?? document.createElement("script");
+      script.type = "application/ld+json";
+      script.textContent = schemaJson;
+      if (!script.isConnected) document.head.appendChild(script);
+    }
+    schemas.forEach((script) => script.remove());
+    if (!schemaJson) {
+      document.head.querySelectorAll('script[type="application/ld+json"]').forEach((script) => script.remove());
+    }
+  }, [canonicalPath, description, index, ogType, schemaJson, title]);
+}
 
 // ---------------------------------------------------------------------------
 // SystemNotice – used before the router is ready (no routing context)
@@ -73,11 +164,33 @@ function lifecycleColor(status: string): "success" | "warning" | "danger" | "def
   return "default";
 }
 
+function apiErrorCode(error: unknown): string | undefined {
+  if (!error || typeof error !== "object" || !("code" in error)) return undefined;
+  const code = (error as { code?: unknown }).code;
+  return typeof code === "string" ? code : undefined;
+}
+
 // ---------------------------------------------------------------------------
 // HomePage – index route component  /
 // ---------------------------------------------------------------------------
 
 export function HomePage() {
+  usePageMetadata({
+    title: HOME_TITLE,
+    description: HOME_DESCRIPTION,
+    canonicalPath: "/",
+    index: true,
+    schema: {
+      "@context": "https://schema.org",
+      "@type": "WebApplication",
+      name: "Share HTML",
+      url: PUBLIC_SITE_ORIGIN + "/",
+      applicationCategory: "DeveloperApplication",
+      operatingSystem: "Any",
+      description: HOME_DESCRIPTION,
+    },
+  });
+
   return (
     <div className="flex flex-col gap-16">
       {/* Hero section */}
@@ -99,6 +212,37 @@ export function HomePage() {
         </div>
       </section>
 
+      <section aria-labelledby="explore-share-html" className="pb-2">
+        <div className="flex flex-wrap items-end justify-between gap-4 mb-5">
+          <div>
+            <p className="text-xs font-semibold tracking-widest uppercase text-muted mb-2">
+              Pick the shortest path
+            </p>
+            <h2 id="explore-share-html" className="text-2xl font-bold text-foreground tracking-tight">
+              Built for quick review, private handoff, and agents.
+            </h2>
+          </div>
+        </div>
+        <div className="marketing-card-grid">
+          <a className="marketing-card" href="/html-preview">
+            <strong>Share an HTML preview</strong>
+            <span>See the exact single-file boundary and three-step flow.</span>
+          </a>
+          <a className="marketing-card" href="/private-html-sharing">
+            <strong>Protect it with a key</strong>
+            <span>Understand what private links hide and how key exchange works.</span>
+          </a>
+          <a className="marketing-card" href="/examples">
+            <strong>Start from an example</strong>
+            <span>Preload a dashboard, product concept, or data brief.</span>
+          </a>
+          <a className="marketing-card" href="/agents">
+            <strong>Connect an agent</strong>
+            <span>Use MCP, OpenAPI, WebMCP, or the raw HTTP endpoint.</span>
+          </a>
+        </div>
+      </section>
+
       {/* Lower grid: auth + dashboard */}
       <section className="grid grid-cols-1 md:grid-cols-[minmax(0,0.7fr)_minmax(0,1fr)] gap-8 pb-12">
         <AuthPanel />
@@ -109,17 +253,174 @@ export function HomePage() {
 }
 
 // ---------------------------------------------------------------------------
+// First-party acquisition pages
+// ---------------------------------------------------------------------------
+
+export function MarketingPageView({ path }: { path: string }) {
+  const page = marketingPageForPath(path);
+  if (!page) {
+    return <SystemNotice title="Page unavailable" detail="This product guide could not be loaded." />;
+  }
+
+  return <MarketingPageContent page={page} />;
+}
+
+function MarketingPageContent({ page }: { page: MarketingPage }) {
+  usePageMetadata({
+    title: page.title,
+    description: page.description,
+    canonicalPath: page.path,
+    index: true,
+    ogType: page.schemaType === "TechArticle" ? "article" : "website",
+    schema: {
+      "@context": "https://schema.org",
+      "@type": page.schemaType,
+      name: page.title,
+      headline: page.heading,
+      description: page.description,
+      url: PUBLIC_SITE_ORIGIN + page.path,
+      isPartOf: { "@id": PUBLIC_SITE_ORIGIN + "/#website" },
+    },
+  });
+
+  return (
+    <article className="marketing-page">
+      <header className="marketing-hero">
+        <p className="text-xs font-semibold tracking-widest uppercase text-muted mb-3">
+          {page.eyebrow}
+        </p>
+        <h1>{page.heading}</h1>
+        <p className="marketing-lead">{page.lead}</p>
+        <div className="marketing-actions">
+          <a className="button primary" href={page.primaryCta.href}>
+            {page.primaryCta.label}
+          </a>
+          {page.secondaryCta && (
+            <a className="button secondary" href={page.secondaryCta.href}>
+              {page.secondaryCta.label}
+            </a>
+          )}
+        </div>
+      </header>
+
+      <div className="marketing-sections">
+        {page.sections.map((section, index) => (
+          <section
+            className="marketing-section"
+            id={page.path === "/agents" && index === 0 ? "mcp-quickstart" : undefined}
+            key={section.title}
+          >
+            <p className="marketing-section-number" aria-hidden="true">
+              {String(index + 1).padStart(2, "0")}
+            </p>
+            <div>
+              <h2>{section.title}</h2>
+              {section.paragraphs.map((paragraph) => <p key={paragraph}>{paragraph}</p>)}
+              {section.bullets && (
+                <ul>
+                  {section.bullets.map((bullet) => <li key={bullet}>{bullet}</li>)}
+                </ul>
+              )}
+              {section.code && <pre><code>{section.code}</code></pre>}
+              {section.links && (
+                <div className="marketing-resource-links">
+                  {section.links.map((link) => (
+                    <a className="button secondary" href={link.href} key={link.href}>
+                      {link.label}
+                    </a>
+                  ))}
+                </div>
+              )}
+            </div>
+          </section>
+        ))}
+      </div>
+
+      <footer className="marketing-footer-cta">
+        <div>
+          <p className="text-xs font-semibold tracking-widest uppercase text-muted mb-2">Ready to try it?</p>
+          <h2>Create the link before you configure a deployment.</h2>
+        </div>
+        <a className="button primary" href={"/?source=" + growthSourceForPage(page.path)}>
+          Upload HTML
+        </a>
+      </footer>
+    </article>
+  );
+}
+
+function growthSourceForPage(path: string): string {
+  return path.slice(1).replace(/[^a-z0-9]+/g, "_");
+}
+
+// ---------------------------------------------------------------------------
 // SharePage – share route component  /s/$slug
 // ---------------------------------------------------------------------------
 
 export function SharePage() {
   const { slug } = useParams({ from: "/s/$slug" });
   const { session } = useSession();
-  const { data: share, isPending: isLoading, error } = usePublicShare(slug);
+  const [accessKey, setAccessKey] = useState(readAccessKeyFromHash);
+  const [submittedAccess, setSubmittedAccess] = useState(() => ({
+    slug,
+    key: readAccessKeyFromHash(),
+  }));
+  const [accessAttempt, setAccessAttempt] = useState(0);
+  const accessStateMatchesSlug = submittedAccess.slug === slug;
+  const submittedAccessKey = accessStateMatchesSlug ? submittedAccess.key : "";
+  const { data: share, isPending: isLoading, error } = useShareAccess(slug, {
+    accessKey: submittedAccessKey || undefined,
+    accessToken: session?.access_token,
+    viewerId: session?.user.id,
+    attempt: accessAttempt,
+    enabled: accessStateMatchesSlug,
+  });
   const reportMutation = useReportShare();
+
+  usePageMetadata({
+    title: share?.title ? `${share.title} | Share HTML` : "Shared HTML | Share HTML",
+    description: "Open a sandboxed HTML preview shared through Share HTML.",
+    canonicalPath: share?.visibility === "public_unlisted" ? `/s/${encodeURIComponent(slug)}` : null,
+    index: false,
+    schema: null,
+  });
 
   const [reportReason, setReportReason] = useState("phishing");
   const [reportDetails, setReportDetails] = useState("");
+
+  useEffect(() => {
+    const key = readAccessKeyFromHash();
+    setAccessKey(key);
+    setSubmittedAccess({ slug, key });
+    setAccessAttempt(0);
+  }, [slug]);
+
+  useEffect(() => {
+    const syncChangedFragment = () => {
+      const key = readAccessKeyFromHash();
+      setAccessKey(key);
+      setSubmittedAccess({ slug, key });
+      setAccessAttempt((attempt) => attempt + 1);
+    };
+    window.addEventListener("hashchange", syncChangedFragment);
+    return () => window.removeEventListener("hashchange", syncChangedFragment);
+  }, [slug]);
+
+  useEffect(() => {
+    if (!share || share.slug !== slug || !submittedAccessKey) return;
+    removeAccessKeyFromHash(submittedAccessKey);
+    setAccessKey((currentKey) =>
+      currentKey.trim() === submittedAccessKey ? "" : currentKey
+    );
+  }, [share, slug, submittedAccessKey]);
+
+  const unlock = (event: FormEvent) => {
+    event.preventDefault();
+    const key = accessKey.trim();
+    if (!key) return;
+    setSubmittedAccess({ slug, key });
+    setAccessAttempt((attempt) => attempt + 1);
+  };
 
   const report = (event: FormEvent) => {
     event.preventDefault();
@@ -138,26 +439,74 @@ export function SharePage() {
     ? (reportMutation.error instanceof Error ? reportMutation.error.message : "Report failed.")
     : "";
 
+  const accessErrorCode = apiErrorCode(error);
+  const accessError = accessErrorCode === "share_access_required" ||
+    accessErrorCode === "invalid_share_access_key";
   const statusMessage = isLoading
     ? "Loading share..."
-    : error
+    : error && !accessError
     ? error.message
     : reportFeedback;
 
   return (
     <section className="flex flex-col gap-6 pt-8 border-t border-border">
       {statusMessage && (
-        <p className={`text-sm ${error ? "text-danger" : "text-muted"}`} aria-live="polite">
+        <p className={`text-sm ${error && !accessError ? "text-danger" : "text-muted"}`} aria-live="polite">
           {statusMessage}
           {isLoading && <Spinner size="sm" color="current" className="ml-2 inline-block align-middle" />}
         </p>
       )}
+      {accessError && (
+        <form
+          className="flex flex-col gap-4 max-w-md p-5 bg-surface border border-border rounded-lg"
+          onSubmit={unlock}
+        >
+          <div>
+            <p className="text-xs font-semibold tracking-widest uppercase text-muted mb-1">
+              Private share
+            </p>
+            <h1 className="text-2xl font-bold text-foreground">Access key required</h1>
+            <p className="text-sm text-muted mt-2">
+              Enter the key sent by the share owner. It is checked by the Worker before any metadata or HTML is returned.
+            </p>
+          </div>
+          <label className="flex flex-col gap-1.5 text-sm font-medium text-foreground">
+            <span>Access key</span>
+            <input
+              className="border border-border rounded-md bg-surface-alt text-foreground px-3 py-2 font-mono text-sm focus:outline-none focus:ring-2 focus:ring-accent"
+              type="password"
+              autoComplete="off"
+              spellCheck={false}
+              value={accessKey}
+              onChange={(event) => setAccessKey(event.target.value)}
+              required
+            />
+          </label>
+          {accessErrorCode === "invalid_share_access_key" && (
+            <p className="text-sm text-danger" role="alert">That access key is not valid.</p>
+          )}
+          <button className="button primary" type="submit">Unlock share</button>
+        </form>
+      )}
+      <aside className="share-referral">
+        <div>
+          <p className="text-xs font-semibold tracking-widest uppercase text-muted mb-1">
+            Made with Share HTML
+          </p>
+          <p className="text-sm text-foreground">
+            Have a prototype or generated HTML file of your own?
+          </p>
+        </div>
+        <a className="button primary" href="/?source=shared_preview">
+          Share your HTML
+        </a>
+      </aside>
       {share && (
         <>
           <div className="flex flex-wrap items-end justify-between gap-4">
             <div>
               <p className="text-xs font-semibold tracking-widest uppercase text-muted mb-2">
-                Public unlisted share
+                {share.visibility === "private_link" ? "Private access-key share" : "Public unlisted share"}
               </p>
               <h1 className="text-3xl font-bold text-foreground tracking-tight mb-3">
                 {share.title || "Untitled HTML"}
@@ -247,7 +596,52 @@ function UploadPanel() {
 
   const [file, setFile] = useState<File | null>(null);
   const [title, setTitle] = useState("");
+  const [visibility, setVisibility] = useState<ShareVisibility>(readRequestedVisibility);
   const [validationError, setValidationError] = useState("");
+  const [exampleStatus, setExampleStatus] = useState("");
+  const [growthSource] = useState(readGrowthSource);
+  const fileRevision = useRef(0);
+  const titleRevision = useRef(0);
+  const exampleController = useRef<AbortController | null>(null);
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const example = exampleTemplateById(params.get("example"));
+    if (!example) return;
+
+    const controller = new AbortController();
+    const startingFileRevision = fileRevision.current;
+    const startingTitleRevision = titleRevision.current;
+    exampleController.current = controller;
+    setExampleStatus("Loading " + example.title + "...");
+    void fetch(example.fileUrl, { signal: controller.signal })
+      .then((response) => {
+        if (!response.ok) throw new Error("Example unavailable");
+        return response.blob();
+      })
+      .then((blob) => {
+        const fileIsUntouched = fileRevision.current === startingFileRevision;
+        const titleIsUntouched = titleRevision.current === startingTitleRevision;
+        if (fileIsUntouched) {
+          setFile(new File([blob], example.id + ".html", { type: "text/html" }));
+        }
+        if (titleIsUntouched) setTitle(example.title);
+        setExampleStatus(fileIsUntouched
+          ? example.title + " is ready to share."
+          : "Example load finished; kept your selected file.");
+      })
+      .catch((error: unknown) => {
+        if (error instanceof DOMException && error.name === "AbortError") return;
+        setExampleStatus("The example could not be loaded. Choose an HTML file instead.");
+      })
+      .finally(() => {
+        if (exampleController.current === controller) exampleController.current = null;
+      });
+    return () => {
+      controller.abort();
+      if (exampleController.current === controller) exampleController.current = null;
+    };
+  }, []);
 
   const result = uploadMutation.data ?? null;
   const busy = uploadMutation.isPending;
@@ -283,7 +677,9 @@ function UploadPanel() {
     uploadMutation.mutate({
       file,
       title,
+      visibility,
       accessToken: session?.access_token,
+      source: growthSource,
     });
   };
 
@@ -300,13 +696,20 @@ function UploadPanel() {
       onSubmit={submit}
       aria-label="Upload an HTML file to share"
     >
+      {exampleStatus && (
+        <p className="text-sm text-muted" role="status">{exampleStatus}</p>
+      )}
+
       {/* Title field */}
       <label className="flex flex-col gap-1.5 text-sm font-medium text-foreground">
         <span>Title</span>
         <input
           className="border border-border rounded-md bg-surface-alt text-foreground px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-accent placeholder:text-muted"
           value={title}
-          onChange={(e) => setTitle(e.target.value)}
+          onChange={(e) => {
+            titleRevision.current += 1;
+            setTitle(e.target.value);
+          }}
           placeholder="Tiny demo, receipt, prototype..."
         />
       </label>
@@ -317,7 +720,13 @@ function UploadPanel() {
           type="file"
           accept=".html,.htm,text/html"
           aria-label="Choose an HTML file"
-          onChange={(e) => setFile(e.target.files?.[0] ?? null)}
+          onChange={(e) => {
+            fileRevision.current += 1;
+            exampleController.current?.abort();
+            exampleController.current = null;
+            setExampleStatus("");
+            setFile(e.target.files?.[0] ?? null);
+          }}
           className="sr-only"
         />
         <span className={`font-mono text-sm font-semibold text-foreground overflow-wrap-anywhere ${file ? "text-foreground" : "text-muted"}`}>
@@ -327,6 +736,36 @@ function UploadPanel() {
           {session ? "Up to 5 MB" : "Anonymous uploads up to 1 MB"}
         </span>
       </label>
+
+      <fieldset className="flex flex-col gap-2">
+        <legend className="text-sm font-medium text-foreground mb-1">Who can open it?</legend>
+        <label className="flex items-start gap-3 p-3 border border-border rounded-md bg-surface-alt cursor-pointer">
+          <input
+            type="radio"
+            name="visibility"
+            value="public_unlisted"
+            checked={visibility === "public_unlisted"}
+            onChange={() => setVisibility("public_unlisted")}
+          />
+          <span className="flex flex-col gap-0.5">
+            <strong className="text-sm text-foreground">Public unlisted</strong>
+            <small className="text-xs text-muted">Anyone with the link can open it. It is not added to the sitemap.</small>
+          </span>
+        </label>
+        <label className="flex items-start gap-3 p-3 border border-border rounded-md bg-surface-alt cursor-pointer">
+          <input
+            type="radio"
+            name="visibility"
+            value="private_link"
+            checked={visibility === "private_link"}
+            onChange={() => setVisibility("private_link")}
+          />
+          <span className="flex flex-col gap-0.5">
+            <strong className="text-sm text-foreground">Private with access key</strong>
+            <small className="text-xs text-muted">Only someone with the generated key can load metadata or the preview.</small>
+          </span>
+        </label>
+      </fieldset>
 
       {/* Primary action — one per view */}
       <button
@@ -369,36 +808,51 @@ function UploadPanel() {
               </h2>
             </div>
             <div className="flex items-center gap-2">
-              <Link
-                to="/s/$slug"
-                params={{ slug: result.share.slug }}
-                className="button secondary"
-              >
+              <a className="button secondary" href={result.share.share_url}>
                 View page
-              </Link>
-              <a
-                className="button ghost"
-                href={result.share.preview_url}
-                target="_blank"
-                rel="noreferrer"
-              >
-                Full preview
               </a>
+              {result.share.visibility === "public_unlisted" && (
+                <a
+                  className="button ghost"
+                  href={result.share.preview_url}
+                  target="_blank"
+                  rel="noreferrer"
+                >
+                  Full preview
+                </a>
+              )}
             </div>
           </div>
 
           <CopyLine
-            label="Share URL"
+            label={result.share.visibility === "private_link" ? "Protected link" : "Share URL"}
             value={result.share.share_url}
             href={result.share.share_url}
-            description="Send this to people. It opens the public page with status, safety context, and the embedded preview."
+            description={result.share.visibility === "private_link"
+              ? "Includes the key after #key=. Treat the complete link as a secret."
+              : "Send this to people. It opens the unlisted page with safety context and the preview."}
           />
-          <CopyLine
-            label="Preview URL"
-            value={result.share.preview_url}
-            href={result.share.preview_url}
-            description="Direct sandboxed render of the uploaded HTML. Useful when you only want to see the page itself."
-          />
+          {result.share.visibility === "private_link" && result.accessKey ? (
+            <>
+              <CopyLine
+                label="Bare link"
+                value={result.share.share_url.split("#")[0]}
+                description="Send this separately from the access key for stronger separation."
+              />
+              <CopyLine
+                label="Access key"
+                value={result.accessKey}
+                description="Shown once. The database stores only its peppered hash."
+              />
+            </>
+          ) : (
+            <CopyLine
+              label="Preview URL"
+              value={result.share.preview_url}
+              href={result.share.preview_url}
+              description="Direct sandboxed render of the uploaded HTML."
+            />
+          )}
           {result.claimToken && (
             <>
               <CopyLine
@@ -426,6 +880,33 @@ function UploadPanel() {
   );
 }
 
+function readGrowthSource(): string {
+  if (typeof window === "undefined") return "direct";
+  const source = new URLSearchParams(window.location.search).get("source")?.toLowerCase() ?? "";
+  return /^[a-z0-9_-]{1,64}$/.test(source) ? source : "direct";
+}
+
+function readRequestedVisibility(): ShareVisibility {
+  if (typeof window === "undefined") return "public_unlisted";
+  return new URLSearchParams(window.location.search).get("visibility") === "private_link"
+    ? "private_link"
+    : "public_unlisted";
+}
+
+function authRedirectUrl(): string {
+  const redirect = new URL("/", window.location.origin);
+  const current = new URL(window.location.href);
+  const source = readGrowthSource();
+  if (source !== "direct") redirect.searchParams.set("source", source);
+
+  const example = exampleTemplateById(current.searchParams.get("example"));
+  if (example) redirect.searchParams.set("example", example.id);
+  if (readRequestedVisibility() === "private_link") {
+    redirect.searchParams.set("visibility", "private_link");
+  }
+  return redirect.toString();
+}
+
 // ---------------------------------------------------------------------------
 // AuthPanel
 // ---------------------------------------------------------------------------
@@ -443,7 +924,7 @@ function AuthPanel() {
     setMessage("Sending link...");
     const { error } = await supabase.auth.signInWithOtp({
       email,
-      options: { emailRedirectTo: window.location.origin },
+      options: { emailRedirectTo: authRedirectUrl() },
     });
     if (error) {
       setMessage(error.message);
@@ -503,11 +984,13 @@ function Dashboard() {
   const { data: shares = [], error: sharesError } = useMyShares(session?.user.id, session?.access_token);
   const deleteMutation = useDeleteShare();
   const claimMutation = useClaimShare();
+  const rotateAccessKeyMutation = useRotateShareAccessKey();
   const navigate = useNavigate();
 
   const [claimToken, setClaimToken] = useState("");
   const [claimShareId, setClaimShareId] = useState("");
   const [actionMessage, setActionMessage] = useState("");
+  const [rotatedAccess, setRotatedAccess] = useState<RotateAccessKeyResult | null>(null);
 
   const deleteShare = async (id: string) => {
     if (!session) return;
@@ -533,6 +1016,20 @@ function Dashboard() {
       setClaimToken("");
     } catch (error) {
       setActionMessage(error instanceof Error ? error.message : "Claim failed.");
+    }
+  };
+
+  const rotateAccessKey = async (shareId: string) => {
+    if (!session) return;
+    try {
+      const result = await rotateAccessKeyMutation.mutateAsync({
+        shareId,
+        accessToken: session.access_token,
+      });
+      setRotatedAccess(result);
+      setActionMessage("Access key rotated. Old links stop unlocking new previews immediately.");
+    } catch (error) {
+      setActionMessage(error instanceof Error ? error.message : "Could not rotate access key.");
     }
   };
 
@@ -585,6 +1082,9 @@ function Dashboard() {
                         {share.lifecycle_status}
                       </Chip>
                       <span className="text-xs text-muted">{formatBytes(share.size_bytes)}</span>
+                      <span className="text-xs text-muted">
+                        {share.visibility === "private_link" ? "private" : "unlisted"}
+                      </span>
                     </div>
                   </div>
                   <div className="flex items-center gap-2 flex-shrink-0">
@@ -596,6 +1096,15 @@ function Dashboard() {
                     >
                       Open
                     </button>
+                    {share.visibility === "private_link" && (
+                      <button
+                        className="button ghost"
+                        onClick={() => void rotateAccessKey(share.id)}
+                        disabled={rotateAccessKeyMutation.isPending}
+                      >
+                        New key
+                      </button>
+                    )}
                     <button
                       className="button ghost danger"
                       onClick={() => deleteShare(share.id)}
@@ -607,12 +1116,44 @@ function Dashboard() {
               ))
             )}
           </div>
+          {rotatedAccess && (
+            <div className="flex flex-col gap-2 pt-3 border-t border-border">
+              <p className="text-sm font-semibold text-foreground">New private access</p>
+              <CopyLine
+                label="Protected link"
+                value={rotatedAccess.share.share_url}
+                href={rotatedAccess.share.share_url}
+                description="This replaces every previously shared key for this page."
+              />
+              <CopyLine
+                label="Access key"
+                value={rotatedAccess.accessKey}
+                description="Copy it now; only its hash is stored."
+              />
+            </div>
+          )}
         </>
       )}
       {sharesError && <p className="text-sm text-danger mt-1">{sharesError.message}</p>}
       {actionMessage && <p className="text-sm text-muted mt-1">{actionMessage}</p>}
     </section>
   );
+}
+
+function readAccessKeyFromHash(): string {
+  if (typeof window === "undefined") return "";
+  return new URLSearchParams(window.location.hash.slice(1)).get("key")?.trim() ?? "";
+}
+
+function removeAccessKeyFromHash(expectedKey: string): boolean {
+  if (typeof window === "undefined") return false;
+  const fragment = new URLSearchParams(window.location.hash.slice(1));
+  if (fragment.get("key")?.trim() !== expectedKey) return false;
+  fragment.delete("key");
+  const remainingFragment = fragment.toString();
+  const nextUrl = `${window.location.pathname}${window.location.search}${remainingFragment ? `#${remainingFragment}` : ""}`;
+  window.history.replaceState(window.history.state, "", nextUrl);
+  return true;
 }
 
 // ---------------------------------------------------------------------------

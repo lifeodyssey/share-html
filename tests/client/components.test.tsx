@@ -25,7 +25,7 @@ import {
   Outlet,
   RouterProvider,
 } from "@tanstack/react-router";
-import { render, screen, waitFor, cleanup } from "@testing-library/react";
+import { act, render, screen, waitFor, cleanup } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
@@ -36,15 +36,18 @@ vi.mock("../../src/client/api.ts", () => ({
   fetchConfig: vi.fn(),
   listShares: vi.fn(),
   fetchPublicShare: vi.fn(),
+  accessShare: vi.fn(),
   uploadShare: vi.fn(),
+  rotateShareAccessKey: vi.fn(),
   deleteShare: vi.fn(),
   claimShare: vi.fn(),
   reportShare: vi.fn(),
 }));
 
 import * as api from "../../src/client/api.ts";
-import { HomePage, SharePage } from "../../src/client/main";
+import { HomePage, MarketingPageView, SharePage } from "../../src/client/main";
 import { SessionContext, type SessionCtxValue } from "../../src/client/session";
+import type { PublicShare } from "../../src/shared/types";
 
 // ---------------------------------------------------------------------------
 // Auto-cleanup after every test
@@ -52,6 +55,8 @@ import { SessionContext, type SessionCtxValue } from "../../src/client/session";
 afterEach(() => {
   cleanup();
   vi.clearAllMocks();
+  window.history.replaceState({}, "", "/");
+  document.head.innerHTML = "";
 });
 
 // ---------------------------------------------------------------------------
@@ -95,13 +100,14 @@ function renderWithProviders(
   const routeTree = rootRoute.addChildren([testRoute]);
   const router = createRouter({ routeTree, history });
 
-  return render(
+  const rendered = render(
     <QueryClientProvider client={client}>
       <SessionContext.Provider value={sessionValue}>
         <RouterProvider router={router} />
       </SessionContext.Provider>
     </QueryClientProvider>
   );
+  return { ...rendered, router };
 }
 
 // ---------------------------------------------------------------------------
@@ -127,14 +133,16 @@ const fakeShare = {
   slug: "my-slug",
   title: "My HTML Page",
   lifecycle_status: "active",
+  moderation_status: "clean",
+  visibility: "public_unlisted",
   risk_score: 1,
   risk_reasons: [],
   size_bytes: 2048,
   share_url: "https://example.com/s/my-slug",
   preview_url: "https://cdn.example.com/preview/my-slug",
   expires_at: null,
-  owner_id: null,
-};
+  created_at: "2026-07-19T00:00:00.000Z",
+} satisfies PublicShare;
 
 // ---------------------------------------------------------------------------
 // UploadPanel (rendered inside HomePage)
@@ -160,6 +168,7 @@ describe("UploadPanel (via HomePage)", () => {
     vi.mocked(api.uploadShare).mockResolvedValue({
       share: fakeShare as never,
       claimToken: "claim-abc",
+      accessKey: null,
       message: "Uploaded",
     });
 
@@ -181,7 +190,13 @@ describe("UploadPanel (via HomePage)", () => {
 
     expect(await screen.findByText(/your share is live/i)).toBeDefined();
     expect(await screen.findByText("My HTML Page")).toBeDefined();
-    expect(api.uploadShare).toHaveBeenCalledWith(file, "", undefined);
+    expect(api.uploadShare).toHaveBeenCalledWith(
+      file,
+      "",
+      "public_unlisted",
+      undefined,
+      "direct"
+    );
   });
 
   it("shows error message when uploadShare rejects", async () => {
@@ -205,10 +220,117 @@ describe("UploadPanel (via HomePage)", () => {
     expect(await screen.findByText(/server error/i)).toBeDefined();
   });
 
+  it("preloads an allowlisted example and preserves its acquisition source", async () => {
+    window.history.replaceState({}, "", "/?example=status-dashboard&source=examples");
+    const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response("<!doctype html><html><h1>Example</h1></html>", {
+        headers: { "content-type": "text/html" },
+      })
+    );
+    vi.mocked(api.uploadShare).mockResolvedValue({
+      share: fakeShare as never,
+      claimToken: "claim-example",
+      accessKey: null,
+      message: "Uploaded",
+    });
+
+    renderWithProviders(HomePage, {
+      sessionValue: noSession,
+      initialPath: "/",
+      routePath: "/",
+    });
+
+    expect(await screen.findByText(/status dashboard is ready to share/i)).toBeDefined();
+    const form = screen.getByRole("form", { name: /upload an html file/i });
+    await userEvent.setup().click(form.querySelector("button.button.primary")!);
+
+    await waitFor(() => expect(api.uploadShare).toHaveBeenCalled());
+    const [file, title, visibility, token, source] = vi.mocked(api.uploadShare).mock.calls[0];
+    expect(file.name).toBe("status-dashboard.html");
+    expect(title).toBe("Status dashboard");
+    expect(visibility).toBe("public_unlisted");
+    expect(token).toBeUndefined();
+    expect(source).toBe("examples");
+    fetchSpy.mockRestore();
+  });
+
+  it("never lets a slow example preload replace a file or title chosen by the user", async () => {
+    window.history.replaceState({}, "", "/?example=status-dashboard&source=examples");
+    let resolveFetch!: (response: Response) => void;
+    const fetchSpy = vi.spyOn(globalThis, "fetch").mockReturnValue(
+      new Promise<Response>((resolve) => {
+        resolveFetch = resolve;
+      })
+    );
+    vi.mocked(api.uploadShare).mockResolvedValue({
+      share: fakeShare as never,
+      claimToken: "claim-user-file",
+      accessKey: null,
+      message: "Uploaded",
+    });
+
+    renderWithProviders(HomePage, {
+      sessionValue: noSession,
+      initialPath: "/",
+      routePath: "/",
+    });
+
+    const user = userEvent.setup();
+    const chosenFile = new File(["<h1>User file</h1>"], "chosen.html", { type: "text/html" });
+    await user.type(await screen.findByRole("textbox", { name: /title/i }), "User title");
+    await user.upload(await screen.findByLabelText(/choose an html file/i), chosenFile);
+
+    await act(async () => {
+      resolveFetch(new Response("<h1>Late example</h1>", {
+        headers: { "content-type": "text/html" },
+      }));
+    });
+
+    const form = screen.getByRole("form", { name: /upload an html file/i });
+    await user.click(form.querySelector("button.button.primary")!);
+
+    await waitFor(() => expect(api.uploadShare).toHaveBeenCalled());
+    expect(api.uploadShare).toHaveBeenCalledWith(
+      chosenFile,
+      "User title",
+      "public_unlisted",
+      undefined,
+      "examples"
+    );
+    fetchSpy.mockRestore();
+  });
+
+  it("preserves a validated acquisition source through the OTP redirect", async () => {
+    window.history.replaceState({}, "", "/?source=shared_preview&visibility=private_link");
+    const signInWithOtp = vi.fn().mockResolvedValue({ error: null });
+    const sessionValue: SessionCtxValue = {
+      session: null,
+      supabase: { auth: { signInWithOtp } } as never,
+    };
+
+    renderWithProviders(HomePage, {
+      sessionValue,
+      initialPath: "/",
+      routePath: "/",
+    });
+
+    const user = userEvent.setup();
+    await user.type(await screen.findByPlaceholderText("you@example.com"), "person@example.com");
+    await user.click(screen.getByRole("button", { name: /send link/i }));
+
+    await waitFor(() => expect(signInWithOtp).toHaveBeenCalled());
+    const redirect = new URL(signInWithOtp.mock.calls[0][0].options.emailRedirectTo);
+    expect(redirect.origin).toBe(window.location.origin);
+    expect(redirect.pathname).toBe("/");
+    expect(redirect.searchParams.get("source")).toBe("shared_preview");
+    expect(redirect.searchParams.get("visibility")).toBe("private_link");
+  });
+
   it("passes access token when session is present", async () => {
     vi.mocked(api.uploadShare).mockResolvedValue({
       share: fakeShare as never,
       claimToken: null,
+      accessKey: null,
       message: "ok",
     });
     // Dashboard will also fire listShares in this test
@@ -230,7 +352,13 @@ describe("UploadPanel (via HomePage)", () => {
     await user.click(submitBtn);
 
     await waitFor(() =>
-      expect(api.uploadShare).toHaveBeenCalledWith(file, "", "tok-xyz")
+      expect(api.uploadShare).toHaveBeenCalledWith(
+        file,
+        "",
+        "public_unlisted",
+        "tok-xyz",
+        "direct"
+      )
     );
   });
 });
@@ -337,6 +465,100 @@ describe("Dashboard (via HomePage)", () => {
 // ---------------------------------------------------------------------------
 
 describe("SharePage", () => {
+  it("exchanges a fragment key and removes it from the address bar after success", async () => {
+    const accessKey = "A".repeat(43);
+    window.history.replaceState({}, "", `/s/my-slug#key=${accessKey}`);
+    vi.mocked(api.accessShare).mockResolvedValue({
+      ...fakeShare,
+      visibility: "private_link",
+      preview_url: "https://example.com/v/my-slug/",
+    } as never);
+
+    renderWithProviders(SharePage, {
+      sessionValue: noSession,
+      initialPath: "/s/my-slug",
+      routePath: "/s/$slug",
+    });
+
+    expect(await screen.findByText(/private access-key share/i)).toBeDefined();
+    expect(api.accessShare).toHaveBeenCalledWith("my-slug", accessKey, undefined);
+    await waitFor(() => expect(window.location.hash).toBe(""));
+  });
+
+  it("keeps owner authorization available when the URL contains a stale key", async () => {
+    const staleKey = "B".repeat(43);
+    window.history.replaceState({}, "", `/s/my-slug#key=${staleKey}`);
+    vi.mocked(api.accessShare).mockResolvedValue({
+      ...fakeShare,
+      visibility: "private_link",
+      preview_url: "https://example.com/v/my-slug/",
+    } as never);
+
+    renderWithProviders(SharePage, {
+      sessionValue: withSession,
+      initialPath: "/s/my-slug",
+      routePath: "/s/$slug",
+    });
+
+    expect(await screen.findByText(/private access-key share/i)).toBeDefined();
+    expect(api.accessShare).toHaveBeenCalledWith("my-slug", staleKey, "tok-xyz");
+  });
+
+  it("exchanges a replacement key when the hash changes on the same slug", async () => {
+    const keyA = "A".repeat(43);
+    const keyB = "B".repeat(43);
+    window.history.replaceState({}, "", `/s/my-slug#key=${keyA}`);
+    vi.mocked(api.accessShare).mockResolvedValue({
+      ...fakeShare,
+      visibility: "private_link",
+      preview_url: "https://example.com/v/my-slug/",
+    } as never);
+
+    renderWithProviders(SharePage, {
+      sessionValue: noSession,
+      initialPath: "/s/my-slug",
+      routePath: "/s/$slug",
+    });
+    expect(await screen.findByText(/private access-key share/i)).toBeDefined();
+    expect(api.accessShare).toHaveBeenCalledWith("my-slug", keyA, undefined);
+
+    window.history.replaceState({}, "", `/s/my-slug#key=${keyB}`);
+    window.dispatchEvent(new HashChangeEvent("hashchange"));
+
+    await waitFor(() => {
+      expect(api.accessShare).toHaveBeenCalledWith("my-slug", keyB, undefined);
+    });
+  });
+
+  it("never sends one slug's key while a reused route component switches slugs", async () => {
+    const keyA = "A".repeat(43);
+    const keyB = "B".repeat(43);
+    window.history.replaceState({}, "", `/s/slug-a#key=${keyA}`);
+    vi.mocked(api.accessShare).mockResolvedValue({
+      ...fakeShare,
+      visibility: "private_link",
+      preview_url: "https://example.com/v/current/",
+    } as never);
+
+    const { router } = renderWithProviders(SharePage, {
+      sessionValue: noSession,
+      initialPath: "/s/slug-a",
+      routePath: "/s/$slug",
+    });
+    await waitFor(() => {
+      expect(api.accessShare).toHaveBeenCalledWith("slug-a", keyA, undefined);
+    });
+    window.history.replaceState({}, "", `/s/slug-b#key=${keyB}`);
+    await act(async () => {
+      await router.navigate({ to: "/s/$slug", params: { slug: "slug-b" } });
+    });
+    await waitFor(() => {
+      expect(api.accessShare).toHaveBeenCalledWith("slug-b", keyB, undefined);
+    });
+
+    expect(api.accessShare).not.toHaveBeenCalledWith("slug-b", keyA, undefined);
+  });
+
   it("shows loading state initially", async () => {
     // Never-resolving promise keeps loading indefinitely
     vi.mocked(api.fetchPublicShare).mockReturnValue(new Promise(() => {}));
@@ -362,6 +584,8 @@ describe("SharePage", () => {
     expect(await screen.findByText("My HTML Page")).toBeDefined();
     expect(screen.getByText(/public unlisted share/i)).toBeDefined();
     expect(api.fetchPublicShare).toHaveBeenCalledWith("my-slug");
+    const referral = screen.getByRole("link", { name: /share your html/i });
+    expect(referral.getAttribute("href")).toBe("/?source=shared_preview");
   });
 
   it("shows error when share is not found", async () => {
@@ -466,5 +690,41 @@ describe("SharePage", () => {
         "tok-xyz"
       )
     );
+  });
+});
+
+describe("MarketingPageView", () => {
+  it("renders an agent quickstart with the live MCP endpoint and upload CTA", () => {
+    render(<MarketingPageView path="/agents" />);
+
+    expect(screen.getByRole("heading", { name: /give an agent html/i })).toBeDefined();
+    expect(screen.getByText("https://sharehtml.zhenjia.dev/mcp")).toBeDefined();
+    expect(screen.getByRole("link", { name: /upload html/i }).getAttribute("href"))
+      .toBe("/?source=agents");
+  });
+
+  it("keeps title, canonical, robots, and structured data in sync across SPA page changes", async () => {
+    render(<MarketingPageView path="/agents" />);
+
+    await waitFor(() => expect(document.title).toBe("Share HTML for AI Agents — MCP, OpenAPI, A2A, and HTTP"));
+    expect(document.head.querySelector<HTMLLinkElement>('link[rel="canonical"]')?.href)
+      .toBe("https://sharehtml.zhenjia.dev/agents");
+    expect(document.head.querySelector<HTMLMetaElement>('meta[name="robots"]')?.content)
+      .toBe("index, follow, max-image-preview:large");
+
+    cleanup();
+    renderWithProviders(HomePage, {
+      sessionValue: noSession,
+      initialPath: "/",
+      routePath: "/",
+    });
+
+    await waitFor(() => expect(document.title).toBe("Share HTML — Upload and Share Sandboxed HTML Previews"));
+    expect(document.head.querySelector<HTMLLinkElement>('link[rel="canonical"]')?.href)
+      .toBe("https://sharehtml.zhenjia.dev/");
+    expect(document.head.querySelector<HTMLMetaElement>('meta[name="robots"]')?.content)
+      .toBe("index, follow, max-image-preview:large");
+    expect(document.head.querySelector('script[type="application/ld+json"]')?.textContent)
+      .toContain('"@type":"WebApplication"');
   });
 });

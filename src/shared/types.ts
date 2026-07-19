@@ -9,6 +9,8 @@ export type LifecycleStatus =
 
 export type ModerationStatus = "pending" | "clean" | "suspicious" | "blocked";
 
+export type ShareVisibility = "public_unlisted" | "private_link";
+
 export type RiskReason = {
   code: string;
   weight: number;
@@ -26,7 +28,9 @@ export type ShareRecord = {
   r2_prefix: string;
   size_bytes: number;
   content_hash: string;
-  visibility: "public_unlisted";
+  visibility: ShareVisibility;
+  access_key_hash: string | null;
+  access_key_version: number | null;
   lifecycle_status: LifecycleStatus;
   moderation_status: ModerationStatus;
   risk_score: number;
@@ -46,10 +50,10 @@ export type PublicShare = {
   moderation_status: ModerationStatus;
   risk_score: number;
   risk_reasons: RiskReason[];
+  visibility: ShareVisibility;
   share_url: string;
   preview_url: string;
   expires_at: string | null;
   created_at: string;
   size_bytes: number;
-  owner_user_id: string | null;
 };

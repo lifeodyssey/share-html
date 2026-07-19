@@ -24,7 +24,9 @@ vi.mock("../../src/client/api.ts", () => ({
   fetchConfig: vi.fn(),
   listShares: vi.fn(),
   fetchPublicShare: vi.fn(),
+  accessShare: vi.fn(),
   uploadShare: vi.fn(),
+  rotateShareAccessKey: vi.fn(),
   deleteShare: vi.fn(),
   claimShare: vi.fn(),
   reportShare: vi.fn(),
@@ -39,6 +41,8 @@ import {
   useMyShares,
   usePublicShare,
   useReportShare,
+  useRotateShareAccessKey,
+  useShareAccess,
   useUploadShare,
 } from "../../src/client/queries.ts";
 
@@ -204,6 +208,149 @@ describe("usePublicShare", () => {
 });
 
 // ---------------------------------------------------------------------------
+// useShareAccess
+// ---------------------------------------------------------------------------
+
+describe("useShareAccess", () => {
+  let client: QueryClient;
+
+  beforeEach(() => {
+    client = makeFreshClient();
+    vi.mocked(api.fetchPublicShare).mockResolvedValue({ id: "pub1", slug: "slug" } as never);
+    vi.mocked(api.accessShare).mockResolvedValue({ id: "priv1", slug: "slug" } as never);
+  });
+
+  afterEach(async () => {
+    await client.cancelQueries();
+    client.clear();
+    vi.clearAllMocks();
+  });
+
+  it("keeps the raw key out of the query key and exchanges it through POST", async () => {
+    const { result } = renderHook(
+      () => useShareAccess("slug", { accessKey: "raw-secret", attempt: 1 }),
+      { wrapper: makeWrapper(client) }
+    );
+
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+
+    expect(api.accessShare).toHaveBeenCalledWith("slug", "raw-secret", undefined);
+    const queryKey = client.getQueryCache().getAll()[0]?.queryKey ?? [];
+    expect(queryKey.slice(0, 4)).toEqual([
+      "shareAccess",
+      "slug",
+      "key",
+      "anonymous",
+    ]);
+    expect(queryKey[4]).toMatch(/^[0-9a-f-]{36}$/);
+    expect(queryKey[5]).toBe(1);
+    expect(JSON.stringify(queryKey)).not.toContain("raw-secret");
+  });
+
+  it("sends the owner JWT alongside a key so a stale key cannot block owner fallback", async () => {
+    const { result } = renderHook(
+      () => useShareAccess("slug", {
+        accessKey: "stale-secret",
+        accessToken: "owner-jwt",
+        attempt: 1,
+      }),
+      { wrapper: makeWrapper(client) }
+    );
+
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+
+    expect(api.accessShare).toHaveBeenCalledWith("slug", "stale-secret", "owner-jwt");
+  });
+
+  it("loads a public share without sending the signed-in owner's JWT", async () => {
+    const { result } = renderHook(
+      () => useShareAccess("slug", { accessToken: "owner-jwt", attempt: 0 }),
+      { wrapper: makeWrapper(client) }
+    );
+
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+
+    expect(api.fetchPublicShare).toHaveBeenCalledWith("slug");
+    expect(api.accessShare).not.toHaveBeenCalled();
+  });
+
+  it("falls back to the scoped metadata grant or owner authorization when public metadata requires a key", async () => {
+    vi.mocked(api.fetchPublicShare).mockRejectedValue(
+      Object.assign(new Error("Access key required."), { code: "share_access_required" })
+    );
+
+    const { result } = renderHook(
+      () => useShareAccess("slug", { accessToken: "owner-jwt", attempt: 0 }),
+      { wrapper: makeWrapper(client) }
+    );
+
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+
+    expect(api.accessShare).toHaveBeenCalledWith("slug", undefined, "owner-jwt");
+  });
+
+  it("tries the scoped metadata grant for an anonymous reload after the fragment was scrubbed", async () => {
+    vi.mocked(api.fetchPublicShare).mockRejectedValue(
+      Object.assign(new Error("Access key required."), { code: "share_access_required" })
+    );
+
+    const { result } = renderHook(
+      () => useShareAccess("slug", { attempt: 0 }),
+      { wrapper: makeWrapper(client) }
+    );
+
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+
+    expect(api.accessShare).toHaveBeenCalledWith("slug", undefined, undefined);
+  });
+
+  it("uses a new opaque query identity on every mount so rotated keys cannot hit stale success", async () => {
+    const first = renderHook(
+      () => useShareAccess("slug", { accessKey: "key-a", attempt: 0 }),
+      { wrapper: makeWrapper(client) }
+    );
+    await waitFor(() => expect(first.result.current.isSuccess).toBe(true));
+    const firstIdentity = client.getQueryCache().getAll()[0]?.queryKey[4];
+    first.unmount();
+
+    const second = renderHook(
+      () => useShareAccess("slug", { accessKey: "key-b", attempt: 0 }),
+      { wrapper: makeWrapper(client) }
+    );
+    await waitFor(() => expect(second.result.current.isSuccess).toBe(true));
+    const secondIdentity = client.getQueryCache().getAll()[0]?.queryKey[4];
+
+    expect(firstIdentity).not.toBe(secondIdentity);
+    expect(api.accessShare).toHaveBeenNthCalledWith(1, "slug", "key-a", undefined);
+    expect(api.accessShare).toHaveBeenNthCalledWith(2, "slug", "key-b", undefined);
+  });
+
+  it("isolates owner-mode metadata by stable user id without putting the JWT in the key", async () => {
+    vi.mocked(api.fetchPublicShare).mockRejectedValue(
+      Object.assign(new Error("Access key required."), { code: "share_access_required" })
+    );
+    const props = { viewerId: "user-a", accessToken: "jwt-a" };
+    const { result, rerender } = renderHook(
+      ({ viewerId, accessToken }) => useShareAccess("slug", {
+        viewerId,
+        accessToken,
+        attempt: 0,
+      }),
+      { wrapper: makeWrapper(client), initialProps: props }
+    );
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+
+    rerender({ viewerId: "user-b", accessToken: "jwt-b" });
+    await waitFor(() => expect(api.accessShare).toHaveBeenCalledTimes(2));
+
+    const keys = client.getQueryCache().getAll().map((query) => query.queryKey);
+    expect(keys.some((key) => key[3] === "user-b")).toBe(true);
+    expect(JSON.stringify(keys)).not.toContain("jwt-a");
+    expect(JSON.stringify(keys)).not.toContain("jwt-b");
+  });
+});
+
+// ---------------------------------------------------------------------------
 // useUploadShare
 // ---------------------------------------------------------------------------
 
@@ -215,6 +362,7 @@ describe("useUploadShare", () => {
     vi.mocked(api.uploadShare).mockResolvedValue({
       share: { id: "new-share", slug: "new-slug" } as never,
       claimToken: "claim-tok",
+      accessKey: null,
       message: "Uploaded",
     });
   });
@@ -238,11 +386,19 @@ describe("useUploadShare", () => {
       await result.current.mutateAsync({
         file,
         title: "My Upload",
+        visibility: "public_unlisted",
         accessToken: "tok",
+        source: "agents",
       });
     });
 
-    expect(api.uploadShare).toHaveBeenCalledWith(file, "My Upload", "tok");
+    expect(api.uploadShare).toHaveBeenCalledWith(
+      file,
+      "My Upload",
+      "public_unlisted",
+      "tok",
+      "agents"
+    );
   });
 
   it("invalidates ['myShares'] on success", async () => {
@@ -255,12 +411,41 @@ describe("useUploadShare", () => {
     const file = new File(["x"], "index.html", { type: "text/html" });
 
     await act(async () => {
-      await result.current.mutateAsync({ file, title: "T" });
+      await result.current.mutateAsync({
+        file,
+        title: "T",
+        visibility: "public_unlisted",
+      });
     });
 
     expect(invalidate).toHaveBeenCalledWith(
       expect.objectContaining({ queryKey: ["myShares"] })
     );
+  });
+});
+
+describe("useRotateShareAccessKey", () => {
+  it("clears cached access state for the rotated slug", async () => {
+    const client = makeFreshClient();
+    vi.mocked(api.rotateShareAccessKey).mockResolvedValue({
+      share: { slug: "rotated-slug" } as never,
+      accessKey: "new-key",
+    });
+    client.setQueryData(
+      ["shareAccess", "rotated-slug", "key", "anonymous", "old-session", 0],
+      { id: "stale" }
+    );
+    const { result } = renderHook(() => useRotateShareAccessKey(), {
+      wrapper: makeWrapper(client),
+    });
+
+    await act(async () => {
+      await result.current.mutateAsync({ shareId: "share-1", accessToken: "owner-jwt" });
+    });
+
+    expect(api.rotateShareAccessKey).toHaveBeenCalledWith("share-1", "owner-jwt");
+    expect(client.getQueriesData({ queryKey: ["shareAccess", "rotated-slug"] })).toEqual([]);
+    client.clear();
   });
 });
 

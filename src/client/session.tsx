@@ -54,6 +54,11 @@ export function Header() {
       </button>
 
       <div className="flex items-center gap-3 flex-wrap justify-end">
+        <nav className="hidden md:flex items-center gap-1" aria-label="Product">
+          <a className="button ghost" href="/html-preview">How it works</a>
+          <a className="button ghost" href="/examples">Examples</a>
+          <a className="button ghost" href="/agents">For agents</a>
+        </nav>
         <a
           className="button ghost"
           href={GITHUB_URL}

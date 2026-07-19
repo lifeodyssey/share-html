@@ -1,4 +1,4 @@
-import type { ShareRecord } from "../shared/types.ts";
+import type { PublicShare, ShareRecord, ShareVisibility } from "../shared/types.ts";
 import {
   cleanTitle,
   errorMessage,
@@ -28,11 +28,26 @@ import {
   insertShareAsset,
   logShareEvent,
   requireWorkerDatabaseAccess,
+  rotateShareAccessKeyRow,
   setShareModeration,
   softDeleteShare,
   toPublicShare,
   updateShareScanResult,
 } from "./db.ts";
+import {
+  createMetadataGrant,
+  createPreviewGrant,
+  createShareAccessKey,
+  CURRENT_SHARE_ACCESS_KEY_VERSION,
+  hashShareAccessKey,
+  metadataGrantCookie,
+  previewGrantCookie,
+  readMetadataGrant,
+  readPreviewGrant,
+  verifyPreviewGrant,
+  verifyMetadataGrant,
+  verifyShareAccessKey,
+} from "./share-access.ts";
 import { scanHtml } from "./scan.ts";
 import {
   type AuthUser,
@@ -40,7 +55,8 @@ import {
   requireUser,
   requireAdmin,
 } from "./auth.ts";
-import { json, readJson } from "./http.ts";
+import { json, readJson, withDiscoveryHeaders } from "./http.ts";
+import { USER_CONTENT_SIGNAL } from "./constants.ts";
 
 type Env = {
   ASSETS: Fetcher;
@@ -50,6 +66,8 @@ type Env = {
   SUPABASE_PUBLISHABLE_KEY: string;
   SUPABASE_REST_KEY: string;
   WORKER_API_SECRET: string;
+  SHARE_ACCESS_PEPPER_V1: string;
+  PREVIEW_GRANT_SIGNING_KEY_V1: string;
   SUPABASE_SEND_EMAIL_HOOK_SECRET?: string;
   AUTH_EMAIL_FROM?: string;
   AUTH_EMAIL_FROM_NAME?: string;
@@ -63,6 +81,9 @@ type Env = {
 const HTML_HEADERS = {
   "content-type": "text/html; charset=utf-8"
 };
+
+const NO_INDEX = "noindex, nofollow, noarchive, nosnippet, noimageindex";
+const GROWTH_SOURCE_PATTERN = /^[a-z0-9_-]{1,64}$/;
 
 export async function createShare(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
   requireWorkerDatabaseAccess(env);
@@ -85,18 +106,41 @@ export async function createShare(request: Request, env: Env, ctx: ExecutionCont
 
   const html = await file.text();
   const title = typeof form.get("title") === "string" ? (form.get("title") as string) : "";
+  const rawSource = typeof form.get("source") === "string" ? (form.get("source") as string) : "";
+  const source = GROWTH_SOURCE_PATTERN.test(rawSource) ? rawSource : "api";
+  const visibilityValue = form.get("visibility");
+  const visibility = visibilityValue === null || visibilityValue === "public_unlisted"
+    ? "public_unlisted"
+    : visibilityValue === "private_link"
+    ? "private_link"
+    : null;
+  if (!visibility) {
+    return shareJson({ error: "Visibility must be public_unlisted or private_link." }, 422);
+  }
 
-  const result = await createShareRecord(env, ctx, request, { html, title, user });
-  return json(result.body, result.status);
+  const result = await createShareRecord(env, ctx, request, { html, title, user, visibility, source });
+  return shareJson(result.body, result.status);
 }
 
 export async function createShareRecord(
   env: Env,
   ctx: ExecutionContext,
   request: Request,
-  opts: { html: string; title: string; user: AuthUser | null }
+  opts: {
+    html: string;
+    title: string;
+    user: AuthUser | null;
+    visibility?: ShareVisibility;
+    source?: string;
+  }
 ): Promise<{ status: number; body: Record<string, unknown> }> {
-  const { html, title, user } = opts;
+  const {
+    html,
+    title,
+    user,
+    visibility = "public_unlisted",
+    source = "api",
+  } = opts;
 
   const ipHash = await hashText(getClientIp(request), env.IP_HASH_SALT ?? env.WORKER_API_SECRET);
   const uaHash = await hashText(request.headers.get("user-agent") ?? "unknown", env.IP_HASH_SALT ?? env.WORKER_API_SECRET);
@@ -120,6 +164,8 @@ export async function createShareRecord(
   const slug = await createUniqueSlug(env);
   const claimToken = user ? null : createSecretToken();
   const claimTokenHash = claimToken ? await hashText(claimToken, env.WORKER_API_SECRET) : null;
+  const accessKey = visibility === "private_link" ? createShareAccessKey() : null;
+  const accessKeyHash = accessKey ? await hashShareAccessKey(accessKey, env) : null;
   const contentHash = await sha256Hex(html);
   const scan = scanHtml(html);
   const now = new Date();
@@ -137,6 +183,9 @@ export async function createShareRecord(
     r2_prefix: r2Prefix,
     size_bytes: byteLength,
     content_hash: contentHash,
+    visibility,
+    access_key_hash: accessKeyHash,
+    access_key_version: accessKey ? CURRENT_SHARE_ACCESS_KEY_VERSION : null,
     lifecycle_status: "uploading",
     moderation_status: "pending",
     risk_score: scan.score,
@@ -170,13 +219,18 @@ export async function createShareRecord(
       throw new Error(`scan-result update for share ${shareId} returned no row`);
     }
 
-    ctx.waitUntil(logShareEvent(env, shareId, user?.id ?? null, "created", ipHash, uaHash, { risk_score: scan.score }).catch(logBackgroundError));
+    ctx.waitUntil(logShareEvent(env, shareId, user?.id ?? null, "created", ipHash, uaHash, {
+      risk_score: scan.score,
+      visibility,
+      source: GROWTH_SOURCE_PATTERN.test(source) ? source : "api",
+    }).catch(logBackgroundError));
 
     return {
       status: scan.lifecycle === "blocked" ? 202 : 201,
       body: {
-        share: toPublicShare(share, request, env),
+        share: withAccessKey(toPublicShare(share, request, env), accessKey),
         claimToken,
+        accessKey,
         message: scan.lifecycle === "blocked" ? "Uploaded, but blocked by automatic risk checks." : "Uploaded."
       }
     };
@@ -216,14 +270,97 @@ export async function listMyShares(request: Request, env: Env): Promise<Response
 
   const shares = await findUserShares(env, user.id);
 
-  return json({ shares: shares.map((share) => toPublicShare(share, request, env)) });
+  return shareJson({ shares: shares.map((share) => toPublicShare(share, request, env)) });
 }
 
 export async function getPublicShare(slug: string, request: Request, env: Env): Promise<Response> {
   const share = await getShareBySlug(env, slug);
-  if (!share || share.deleted_at) return json({ error: "Share not found" }, 404);
+  if (!share || share.deleted_at) return shareJson({ error: "Share not found." }, 404);
+  if (share.visibility === "private_link") {
+    return shareJson({ error: "Access key required.", code: "share_access_required" }, 401);
+  }
 
-  return json({ share: toPublicShare(share, request, env) });
+  return shareJson({ share: toPublicShare(share, request, env) });
+}
+
+export async function accessShare(
+  slug: string,
+  request: Request,
+  env: Env,
+  ctx: ExecutionContext
+): Promise<Response> {
+  const share = await getShareBySlug(env, slug);
+  if (!share || share.deleted_at) return shareJson({ error: "Share not found." }, 404);
+  if (share.visibility === "public_unlisted") {
+    return shareJson({ share: toPublicShare(share, request, env) });
+  }
+
+  const body = await readJson<{ accessKey?: string }>(request);
+  const user = await getOptionalUser(request, env);
+  const ownerAuthorized = Boolean(user && share.owner_user_id === user.id);
+  const metadataGrantAuthorized = await verifyMetadataGrant(
+    readMetadataGrant(request, slug),
+    share,
+    env
+  );
+  const keyAuthorized = await verifyShareAccessKey(
+    body.accessKey,
+    share.access_key_hash,
+    share.access_key_version,
+    env
+  );
+  if (!ownerAuthorized && !metadataGrantAuthorized && !keyAuthorized) {
+    const keyWasProvided = typeof body.accessKey === "string" && body.accessKey.length > 0;
+    return keyWasProvided
+      ? shareJson({ error: "Invalid access key.", code: "invalid_share_access_key" }, 403)
+      : shareJson({ error: "Access key required.", code: "share_access_required" }, 401);
+  }
+
+  const previewGrant = await createPreviewGrant(share, env);
+  const metadataGrant = await createMetadataGrant(share, env);
+  const headers = new Headers();
+  headers.append("set-cookie", previewGrantCookie(slug, previewGrant, request));
+  headers.append("set-cookie", metadataGrantCookie(slug, metadataGrant, request));
+  const accessMethod = ownerAuthorized
+    ? "owner"
+    : keyAuthorized
+    ? "access_key"
+    : "metadata_grant";
+  ctx.waitUntil(
+    logShareEvent(env, share.id, ownerAuthorized ? user?.id ?? null : null, "access_granted", null, null, {
+      method: accessMethod,
+    }).catch(logBackgroundError)
+  );
+  return shareJson({ share: toPublicShare(share, request, env) }, 200, headers);
+}
+
+export async function rotateShareAccessKey(
+  shareId: string,
+  request: Request,
+  env: Env,
+  ctx: ExecutionContext
+): Promise<Response> {
+  const user = await requireUser(request, env);
+  if (user instanceof Response) return user;
+
+  const accessKey = createShareAccessKey();
+  const accessKeyHash = await hashShareAccessKey(accessKey, env);
+  const share = await rotateShareAccessKeyRow(
+    env,
+    shareId,
+    user.id,
+    accessKeyHash,
+    CURRENT_SHARE_ACCESS_KEY_VERSION
+  );
+  if (!share) return shareJson({ error: "Private share not found." }, 404);
+
+  ctx.waitUntil(
+    logShareEvent(env, share.id, user.id, "access_key_rotated", null, null, {}).catch(logBackgroundError)
+  );
+  return shareJson({
+    share: withAccessKey(toPublicShare(share, request, env), accessKey),
+    accessKey,
+  });
 }
 
 export async function reportShare(shareId: string, request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
@@ -310,6 +447,12 @@ export async function previewShare(request: Request, env: Env, ctx: ExecutionCon
 
   const share = await getShareBySlug(env, slug);
   if (!share || share.deleted_at) return previewMessage("Share not found.", 404, request, env);
+  if (share.visibility === "private_link") {
+    const grant = readPreviewGrant(request, slug);
+    if (!(await verifyPreviewGrant(grant, share, env))) {
+      return previewMessage("Access key required.", 403, request, env);
+    }
+  }
   if (share.expires_at && new Date(share.expires_at).getTime() <= Date.now()) {
     return previewMessage("This share has expired.", 410, request, env);
   }
@@ -323,12 +466,14 @@ export async function previewShare(request: Request, env: Env, ctx: ExecutionCon
   const object = await env.SHARE_HTML_BUCKET.get(`${share.r2_prefix}${share.entry_path}`);
   if (!object?.body) return previewMessage("The uploaded HTML object is missing.", 404, request, env);
 
-  ctx.waitUntil(logShareEvent(env, share.id, null, "viewed", null, null, {}).catch(logBackgroundError));
+  if (request.method === "GET") {
+    ctx.waitUntil(logShareEvent(env, share.id, null, "viewed", null, null, {}).catch(logBackgroundError));
+  }
 
-  return new Response(object.body, {
+  return new Response(request.method === "HEAD" ? null : object.body, {
     headers: previewHeaders(request, env, {
       "content-type": object.httpMetadata?.contentType ?? "text/html; charset=utf-8",
-      "cache-control": "public, max-age=60",
+      "cache-control": "private, no-store",
       etag: share.content_hash
     })
   });
@@ -338,9 +483,14 @@ export function previewHeaders(request: Request, env: Env, extra: HeadersInit = 
   const headers = new Headers(extra);
   const origin = appOrigin(env, new URL(request.url).origin);
   headers.set("x-content-type-options", "nosniff");
+  headers.set("x-robots-tag", NO_INDEX);
+  headers.set("content-signal", USER_CONTENT_SIGNAL);
   headers.set("referrer-policy", "no-referrer");
   headers.set("permissions-policy", "camera=(), microphone=(), geolocation=(), payment=()");
   headers.set("cross-origin-opener-policy", "same-origin");
+  // PREVIEW_ORIGIN may intentionally differ from APP_ORIGIN for public
+  // previews. CSP frame-ancestors remains the embedding allowlist.
+  headers.set("cross-origin-resource-policy", "cross-origin");
   headers.set(
     "content-security-policy",
     [
@@ -350,7 +500,8 @@ export function previewHeaders(request: Request, env: Env, extra: HeadersInit = 
       "img-src https: data: blob:",
       "connect-src https:",
       `frame-ancestors 'self' ${origin}`,
-      "base-uri 'none'"
+      "base-uri 'none'",
+      "sandbox allow-scripts allow-forms allow-popups allow-downloads"
     ].join("; ")
   );
   return headers;
@@ -362,4 +513,22 @@ export function previewMessage(message: string, status: number, request: Request
     status,
     headers: previewHeaders(request, env, { ...HTML_HEADERS, "cache-control": "no-store" })
   });
+}
+
+function withAccessKey(share: PublicShare, accessKey: string | null): PublicShare {
+  if (!accessKey) return share;
+  return {
+    ...share,
+    share_url: `${share.share_url}#key=${encodeURIComponent(accessKey)}`,
+  };
+}
+
+function shareJson(body: unknown, status = 200, extraHeaders: HeadersInit = {}): Response {
+  const headers = new Headers(extraHeaders);
+  headers.set("content-type", "application/json; charset=utf-8");
+  headers.set("cache-control", "private, no-store");
+  headers.set("pragma", "no-cache");
+  headers.set("x-robots-tag", NO_INDEX);
+  headers.set("content-signal", USER_CONTENT_SIGNAL);
+  return withDiscoveryHeaders(new Response(JSON.stringify(body), { status, headers }));
 }

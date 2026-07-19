@@ -1,0 +1,62 @@
+name: Publish MCP Registry metadata
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirm_publish:
+        description: "Registry entries cannot currently be unpublished. Type publish to continue."
+        required: true
+        type: string
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  publish:
+    if: ${{ github.ref == 'refs/heads/main' && inputs.confirm_publish == 'publish' }}
+    runs-on: ubuntu-latest
+    environment: production
+    timeout-minutes: 10
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v5
+
+      - name: Verify the production manifest and MCP tools
+        run: |
+          curl --fail --show-error --silent \
+            --output /tmp/production-server.json \
+            https://sharehtml.zhenjia.dev/server.json
+          jq -e --slurp '.[0] == .[1]' server.json /tmp/production-server.json
+
+          expected_version="$(jq -r '.version' server.json)"
+          curl --fail --show-error --silent https://sharehtml.zhenjia.dev/mcp \
+            -H 'content-type: application/json' \
+            -H 'mcp-protocol-version: 2025-11-25' \
+            --data '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{}}' \
+            | jq -e --arg expected_version "$expected_version" '.result.serverInfo.version == $expected_version'
+          curl --fail --show-error --silent https://sharehtml.zhenjia.dev/mcp \
+            -H 'content-type: application/json' \
+            -H 'mcp-protocol-version: 2025-11-25' \
+            --data '{"jsonrpc":"2.0","id":1,"method":"tools/list","params":{}}' \
+            | jq -e '.result.tools | map(.name) | sort == ["create_share", "describe_share_html", "get_public_share"]'
+
+      - name: Install the pinned MCP publisher
+        run: |
+          curl --fail --location --output /tmp/mcp-publisher.tar.gz \
+            https://github.com/modelcontextprotocol/registry/releases/download/v1.7.9/mcp-publisher_linux_amd64.tar.gz
+          echo 'ab128162b0616090b47cf245afe0a23f3ef08936fdce19074f5ba0a4469281ac  /tmp/mcp-publisher.tar.gz' | sha256sum --check
+          tar -xzf /tmp/mcp-publisher.tar.gz mcp-publisher
+
+      - name: Authenticate with GitHub OIDC
+        run: ./mcp-publisher login github-oidc
+
+      - name: Publish remote server metadata
+        run: ./mcp-publisher publish
+
+      - name: Verify registry discovery
+        run: |
+          curl --fail --show-error --silent \
+            'https://registry.modelcontextprotocol.io/v0.1/servers?search=io.github.lifeodyssey/share-html' \
+            | jq -e '.servers | length > 0'

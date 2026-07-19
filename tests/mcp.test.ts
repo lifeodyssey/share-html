@@ -5,6 +5,7 @@ import {
   isJsonRpcRequest,
   mcpResult,
   mcpTools,
+  handleMcpRequest,
   handleMcpMessage,
   handleMcpToolCall,
 } from "../src/worker/mcp.ts";
@@ -24,12 +25,16 @@ const dummyRequest = new Request("https://example.com/mcp", { method: "POST" });
 // isJsonRpcRequest
 // ---------------------------------------------------------------------------
 
-test("isJsonRpcRequest: true for object with string method", () => {
-  assert.equal(isJsonRpcRequest({ method: "x" }), true);
+test("isJsonRpcRequest: true for a JSON-RPC 2.0 object with string method", () => {
+  assert.equal(isJsonRpcRequest({ jsonrpc: "2.0", method: "x" }), true);
 });
 
 test("isJsonRpcRequest: true for object with method and id", () => {
-  assert.equal(isJsonRpcRequest({ id: 1, method: "tools/list" }), true);
+  assert.equal(isJsonRpcRequest({ jsonrpc: "2.0", id: 1, method: "tools/list" }), true);
+});
+
+test("isJsonRpcRequest: false when jsonrpc version is missing", () => {
+  assert.equal(isJsonRpcRequest({ id: 1, method: "tools/list" }), false);
 });
 
 test("isJsonRpcRequest: false for null", () => {
@@ -145,16 +150,16 @@ test("mcpTools: all tools have name, description, inputSchema", () => {
 // handleMcpMessage — method dispatch (no env/R2 needed)
 // ---------------------------------------------------------------------------
 
-test("handleMcpMessage: initialize → protocolVersion 2024-11-05", async () => {
-  const msg = { id: 1, method: "initialize", params: {} };
+test("handleMcpMessage: initialize → current stable protocol version", async () => {
+  const msg = { jsonrpc: "2.0", id: 1, method: "initialize", params: {} };
   const res = await handleMcpMessage(msg, dummyRequest, dummyEnv, dummyCtx);
   assert.ok(res !== null);
   const result = (res!.result as Record<string, unknown>);
-  assert.equal(result.protocolVersion, "2024-11-05");
+  assert.equal(result.protocolVersion, "2025-11-25");
 });
 
 test("handleMcpMessage: initialize → capabilities.tools is object", async () => {
-  const msg = { id: 1, method: "initialize" };
+  const msg = { jsonrpc: "2.0", id: 1, method: "initialize" };
   const res = await handleMcpMessage(msg, dummyRequest, dummyEnv, dummyCtx);
   assert.ok(res !== null);
   const result = (res!.result as Record<string, unknown>);
@@ -163,7 +168,7 @@ test("handleMcpMessage: initialize → capabilities.tools is object", async () =
 });
 
 test("handleMcpMessage: initialize → serverInfo.name is Share HTML", async () => {
-  const msg = { id: 1, method: "initialize" };
+  const msg = { jsonrpc: "2.0", id: 1, method: "initialize" };
   const res = await handleMcpMessage(msg, dummyRequest, dummyEnv, dummyCtx);
   assert.ok(res !== null);
   const result = (res!.result as Record<string, unknown>);
@@ -172,7 +177,7 @@ test("handleMcpMessage: initialize → serverInfo.name is Share HTML", async () 
 });
 
 test("handleMcpMessage: tools/list → returns tools array", async () => {
-  const msg = { id: 2, method: "tools/list" };
+  const msg = { jsonrpc: "2.0", id: 2, method: "tools/list" };
   const res = await handleMcpMessage(msg, dummyRequest, dummyEnv, dummyCtx);
   assert.ok(res !== null);
   const result = (res!.result as Record<string, unknown>);
@@ -180,7 +185,7 @@ test("handleMcpMessage: tools/list → returns tools array", async () => {
 });
 
 test("handleMcpMessage: tools/list → tools array has describe_share_html", async () => {
-  const msg = { id: 2, method: "tools/list" };
+  const msg = { jsonrpc: "2.0", id: 2, method: "tools/list" };
   const res = await handleMcpMessage(msg, dummyRequest, dummyEnv, dummyCtx);
   assert.ok(res !== null);
   const result = (res!.result as Record<string, unknown>);
@@ -189,7 +194,7 @@ test("handleMcpMessage: tools/list → tools array has describe_share_html", asy
 });
 
 test("handleMcpMessage: unknown method → error code -32601", async () => {
-  const msg = { id: 3, method: "no_such_method" };
+  const msg = { jsonrpc: "2.0", id: 3, method: "no_such_method" };
   const res = await handleMcpMessage(msg, dummyRequest, dummyEnv, dummyCtx);
   assert.ok(res !== null);
   const error = res!.error as Record<string, unknown>;
@@ -205,9 +210,63 @@ test("handleMcpMessage: invalid request (non-object) → error code -32600", asy
 
 test("handleMcpMessage: notification (no id field) → returns null", async () => {
   // A valid JSON-RPC notification has a method but no id field
-  const msg = { method: "notifications/initialized" };
+  const msg = { jsonrpc: "2.0", method: "notifications/initialized" };
   const res = await handleMcpMessage(msg, dummyRequest, dummyEnv, dummyCtx);
   assert.equal(res, null);
+});
+
+// ---------------------------------------------------------------------------
+// handleMcpRequest — Streamable HTTP transport boundaries
+// ---------------------------------------------------------------------------
+
+test("handleMcpRequest: GET returns 405 because this stateless server does not open SSE", async () => {
+  const response = await handleMcpRequest(
+    new Request("https://example.com/mcp"),
+    dummyEnv,
+    dummyCtx
+  );
+  assert.equal(response.status, 405);
+  assert.equal(response.headers.get("allow"), "POST");
+});
+
+test("handleMcpRequest: rejects a cross-origin browser request", async () => {
+  const response = await handleMcpRequest(
+    new Request("https://example.com/mcp", {
+      method: "POST",
+      headers: { origin: "https://attacker.example" },
+      body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "tools/list" }),
+    }),
+    dummyEnv,
+    dummyCtx
+  );
+  assert.equal(response.status, 403);
+});
+
+test("handleMcpRequest: accepted notifications return 202 with no body", async () => {
+  const response = await handleMcpRequest(
+    new Request("https://example.com/mcp", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ jsonrpc: "2.0", method: "notifications/initialized" }),
+    }),
+    dummyEnv,
+    dummyCtx
+  );
+  assert.equal(response.status, 202);
+  assert.equal(await response.text(), "");
+});
+
+test("handleMcpRequest: rejects removed JSON-RPC batching", async () => {
+  const response = await handleMcpRequest(
+    new Request("https://example.com/mcp", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify([{ jsonrpc: "2.0", id: 1, method: "tools/list" }]),
+    }),
+    dummyEnv,
+    dummyCtx
+  );
+  assert.equal(response.status, 400);
 });
 
 // ---------------------------------------------------------------------------

@@ -200,6 +200,26 @@ export async function claimShareRow(
   return updated ?? null;
 }
 
+/**
+ * Replace the access-key hash for an owned private share.
+ * Returns null when the share is not private or is not owned by `ownerUserId`.
+ */
+export async function rotateShareAccessKeyRow(
+  env: DbEnv,
+  shareId: string,
+  ownerUserId: string,
+  accessKeyHash: string,
+  accessKeyVersion: number
+): Promise<ShareRecord | null> {
+  const [updated] = await restUpdate<ShareRecord>(
+    env,
+    "shares",
+    `id=eq.${shareId}&owner_user_id=eq.${ownerUserId}&visibility=eq.private_link&deleted_at=is.null`,
+    { access_key_hash: accessKeyHash, access_key_version: accessKeyVersion }
+  );
+  return updated ?? null;
+}
+
 // --- Soft deletion ---
 
 /**
@@ -323,7 +343,12 @@ export async function createUniqueSlug(env: DbEnv): Promise<string> {
 export function toPublicShare(share: ShareRecord, request: Request, env: DbEnv): PublicShare {
   const requestOrigin = new URL(request.url).origin;
   const resolvedAppOrigin = appOrigin(env, requestOrigin);
-  const resolvedPreviewOrigin = previewOrigin(env, requestOrigin);
+  // The unlock response sets a host-only HttpOnly cookie. Keep private
+  // previews on the app origin so that cookie can reach /v/:slug even when a
+  // separate public-preview origin is configured.
+  const resolvedPreviewOrigin = share.visibility === "private_link"
+    ? resolvedAppOrigin
+    : previewOrigin(env, requestOrigin);
   return {
     id: share.id,
     slug: share.slug,
@@ -332,11 +357,11 @@ export function toPublicShare(share: ShareRecord, request: Request, env: DbEnv):
     moderation_status: share.moderation_status,
     risk_score: share.risk_score,
     risk_reasons: share.risk_reasons,
+    visibility: share.visibility,
     share_url: `${resolvedAppOrigin}/s/${share.slug}`,
     preview_url: `${resolvedPreviewOrigin}/v/${share.slug}/`,
     expires_at: share.expires_at,
     created_at: share.created_at,
-    size_bytes: share.size_bytes,
-    owner_user_id: share.owner_user_id
+    size_bytes: share.size_bytes
   };
 }

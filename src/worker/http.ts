@@ -1,4 +1,4 @@
-import { DISCOVERY_LINKS } from "./constants.ts";
+import { DISCOVERY_LINKS, FIRST_PARTY_CONTENT_SIGNAL } from "./constants.ts";
 
 export function acceptsMarkdown(request: Request): boolean {
   if (request.method !== "GET" && request.method !== "HEAD") return false;
@@ -10,6 +10,7 @@ export function withDiscoveryHeaders(response: Response): Response {
   const currentLink = headers.get("Link");
   headers.set("Link", currentLink ? `${currentLink}, ${DISCOVERY_LINKS}` : DISCOVERY_LINKS);
   headers.set("X-Content-Type-Options", headers.get("X-Content-Type-Options") ?? "nosniff");
+  headers.set("Content-Signal", headers.get("Content-Signal") ?? FIRST_PARTY_CONTENT_SIGNAL);
   return new Response(response.body, {
     status: response.status,
     statusText: response.statusText,
@@ -33,6 +34,47 @@ export function jsonResponse(body: unknown, contentType: string, method: string)
       "cache-control": "public, max-age=3600"
     }
   });
+}
+
+export function etaggedJsonResponse(
+  body: unknown,
+  contentType: string,
+  request: Request,
+  etag: string
+): Response {
+  const headers = {
+    "content-type": contentType,
+    "cache-control": "public, max-age=3600",
+    etag,
+  };
+  if (ifNoneMatchMatches(request.headers.get("if-none-match"), etag)) {
+    return new Response(null, { status: 304, headers });
+  }
+  return new Response(request.method === "HEAD" ? null : JSON.stringify(body, null, 2), { headers });
+}
+
+export function ifNoneMatchMatches(header: string | null, currentEtag: string): boolean {
+  if (!header) return false;
+  if (header.trim() === "*") return true;
+
+  const candidates: string[] = [];
+  let start = 0;
+  let inQuotes = false;
+  for (let index = 0; index < header.length; index += 1) {
+    const character = header[index];
+    if (character === '"') {
+      inQuotes = !inQuotes;
+    } else if (character === "," && !inQuotes) {
+      candidates.push(header.slice(start, index).trim());
+      start = index + 1;
+    }
+  }
+  if (inQuotes) return false;
+  candidates.push(header.slice(start).trim());
+
+  const weakValue = (value: string) => value.replace(/^W\//i, "");
+  const expected = weakValue(currentEtag.trim());
+  return candidates.some((candidate) => candidate !== "" && weakValue(candidate) === expected);
 }
 
 export async function readJson<T>(request: Request): Promise<T> {

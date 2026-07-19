@@ -15,18 +15,21 @@ import {
   useQuery,
   useQueryClient,
 } from "@tanstack/react-query";
+import { useState } from "react";
 
-import type { AppConfig, UploadResult } from "./api";
+import type { AppConfig, RotateAccessKeyResult, UploadResult } from "./api";
 import {
+  accessShare,
   claimShare as apiClaimShare,
   deleteShare as apiDeleteShare,
   fetchConfig,
   fetchPublicShare,
   listShares,
   reportShare as apiReportShare,
+  rotateShareAccessKey as apiRotateShareAccessKey,
   uploadShare as apiUploadShare,
 } from "./api";
-import type { PublicShare } from "../shared/types";
+import type { PublicShare, ShareVisibility } from "../shared/types";
 
 // ---------------------------------------------------------------------------
 // Query key catalogue
@@ -37,6 +40,14 @@ export const queryKeys = {
   myShares: (userId: string) => ["myShares", userId] as const,
   mySharesAll: ["myShares"] as const,
   publicShare: (slug: string) => ["publicShare", slug] as const,
+  shareAccessForSlug: (slug: string) => ["shareAccess", slug] as const,
+  shareAccess: (
+    slug: string,
+    mode: "public" | "key" | "owner",
+    viewerId: string,
+    pageSessionId: string,
+    attempt: number
+  ) => ["shareAccess", slug, mode, viewerId, pageSessionId, attempt] as const,
 };
 
 // ---------------------------------------------------------------------------
@@ -109,6 +120,53 @@ export function usePublicShare(slug: string) {
   });
 }
 
+/**
+ * Loads a public share or exchanges an access key / owner JWT for a private
+ * share. The raw key is deliberately excluded from the TanStack query key.
+ */
+export function useShareAccess(
+  slug: string,
+  options: {
+    accessKey?: string;
+    accessToken?: string;
+    viewerId?: string;
+    attempt: number;
+    enabled?: boolean;
+  }
+) {
+  const [pageSessionId] = useState(() => crypto.randomUUID());
+  const mode = options.accessKey ? "key" : options.accessToken ? "owner" : "public";
+  return useQuery<PublicShare, Error>({
+    queryKey: queryKeys.shareAccess(
+      slug,
+      mode,
+      options.viewerId ?? "anonymous",
+      pageSessionId,
+      options.attempt
+    ),
+    queryFn: async () => {
+      if (options.accessKey) {
+        return accessShare(slug, options.accessKey, options.accessToken);
+      }
+
+      try {
+        return await fetchPublicShare(slug);
+      } catch (error) {
+        const code = error && typeof error === "object" && "code" in error
+          ? (error as { code?: unknown }).code
+          : undefined;
+        if (code === "share_access_required") {
+          return accessShare(slug, undefined, options.accessToken);
+        }
+        throw error;
+      }
+    },
+    enabled: !!slug && options.enabled !== false,
+    staleTime: 5 * 60 * 1000,
+    gcTime: 0,
+  });
+}
+
 // ---------------------------------------------------------------------------
 // Mutations
 // ---------------------------------------------------------------------------
@@ -122,12 +180,28 @@ export function useUploadShare() {
   return useMutation<
     UploadResult,
     Error,
-    { file: File; title: string; accessToken?: string }
+    { file: File; title: string; visibility: ShareVisibility; accessToken?: string; source?: string }
   >({
-    mutationFn: ({ file, title, accessToken }) =>
-      apiUploadShare(file, title, accessToken),
+    mutationFn: ({ file, title, visibility, accessToken, source }) =>
+      apiUploadShare(file, title, visibility, accessToken, source),
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: queryKeys.mySharesAll });
+    },
+  });
+}
+
+export function useRotateShareAccessKey() {
+  const qc = useQueryClient();
+  return useMutation<
+    RotateAccessKeyResult,
+    Error,
+    { shareId: string; accessToken: string }
+  >({
+    mutationFn: ({ shareId, accessToken }) =>
+      apiRotateShareAccessKey(shareId, accessToken),
+    onSuccess: (result) => {
+      void qc.invalidateQueries({ queryKey: queryKeys.mySharesAll });
+      qc.removeQueries({ queryKey: queryKeys.shareAccessForSlug(result.share.slug) });
     },
   });
 }
