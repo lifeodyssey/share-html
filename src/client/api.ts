@@ -1,4 +1,4 @@
-import type { PublicShare } from "../shared/types";
+import type { PublicShare, ShareVisibility } from "../shared/types";
 
 // ---------------------------------------------------------------------------
 // Shared types
@@ -12,12 +12,31 @@ export type AppConfig = {
 export type UploadResult = {
   share: PublicShare;
   claimToken: string | null;
+  accessKey: string | null;
   message: string;
+};
+
+export type RotateAccessKeyResult = {
+  share: PublicShare;
+  accessKey: string;
 };
 
 export type ApiError = {
   error?: string;
+  code?: string;
 };
+
+export class ApiRequestError extends Error {
+  readonly status: number;
+  readonly code?: string;
+
+  constructor(message: string, status: number, code?: string) {
+    super(message);
+    this.name = "ApiRequestError";
+    this.status = status;
+    this.code = code;
+  }
+}
 
 // ---------------------------------------------------------------------------
 // Internal helpers
@@ -36,7 +55,7 @@ async function expectOk<T>(res: Response, fallback: string): Promise<T> {
   } catch {
     if (!res.ok) throw new Error(fallback);
   }
-  if (!res.ok) throw new Error(payload?.error ?? fallback);
+  if (!res.ok) throw new ApiRequestError(payload?.error ?? fallback, res.status, payload?.code);
   return payload as T;
 }
 
@@ -72,11 +91,15 @@ export async function fetchConfig(): Promise<AppConfig> {
 export async function uploadShare(
   file: File,
   title: string,
-  accessToken?: string
+  visibility: ShareVisibility,
+  accessToken?: string,
+  source?: string
 ): Promise<UploadResult> {
   const body = new FormData();
   body.set("file", file);
   body.set("title", title);
+  body.set("visibility", visibility);
+  if (source) body.set("source", source);
 
   const response = await fetch("/api/shares", {
     method: "POST",
@@ -150,6 +173,43 @@ export async function fetchPublicShare(slug: string): Promise<PublicShare> {
   const payload = await expectOk<{ share?: PublicShare }>(response, "Share not found");
   if (!payload.share) throw new Error("Share not found");
   return payload.share;
+}
+
+/**
+ * Unlocks an access-key protected share, or authorizes its signed-in owner.
+ * The access key is sent in the JSON body, never in the request URL. On
+ * success the Worker sets separate short-lived HttpOnly grants scoped to the
+ * exact metadata-unlock path and /v/:slug.
+ */
+export async function accessShare(
+  slug: string,
+  accessKey?: string,
+  accessToken?: string
+): Promise<PublicShare> {
+  const response = await fetch(`/api/shares/${slug}/access`, {
+    method: "POST",
+    credentials: "same-origin",
+    headers: {
+      ...(accessToken ? { authorization: `Bearer ${accessToken}` } : {}),
+      "content-type": "application/json",
+    },
+    body: JSON.stringify(accessKey ? { accessKey } : {}),
+  });
+  const payload = await expectOk<{ share?: PublicShare }>(response, "Could not unlock share");
+  if (!payload.share) throw new Error("Share not found");
+  return payload.share;
+}
+
+/** Rotates the access key for an owned private share. */
+export async function rotateShareAccessKey(
+  shareId: string,
+  accessToken: string
+): Promise<RotateAccessKeyResult> {
+  const response = await fetch(`/api/shares/${shareId}/access-key`, {
+    method: "POST",
+    headers: { authorization: `Bearer ${accessToken}` },
+  });
+  return expectOk<RotateAccessKeyResult>(response, "Could not rotate access key");
 }
 
 /**

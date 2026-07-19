@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Northstar — Project Status</title>
+    <style>
+      :root { color-scheme: light; font-family: Inter, ui-sans-serif, system-ui, sans-serif; color: #17211d; background: #f4f7f5; }
+      * { box-sizing: border-box; }
+      body { margin: 0; padding: 32px 20px; }
+      main { width: min(980px, 100%); margin: 0 auto; }
+      header { display: flex; justify-content: space-between; gap: 24px; align-items: end; margin-bottom: 28px; }
+      h1, h2, p { margin-top: 0; }
+      h1 { font-size: clamp(2rem, 6vw, 4rem); letter-spacing: -.06em; margin-bottom: 8px; }
+      h2 { font-size: .78rem; letter-spacing: .12em; text-transform: uppercase; color: #65736d; }
+      .muted { color: #65736d; }
+      .badge { border: 1px solid #add6be; background: #e5f6eb; color: #17613a; padding: 8px 12px; border-radius: 999px; font-weight: 700; white-space: nowrap; }
+      .grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; }
+      .card { border: 1px solid #dbe2de; background: #fff; border-radius: 16px; padding: 22px; }
+      .metric { font-size: 2.4rem; font-weight: 750; letter-spacing: -.05em; margin: 14px 0 4px; }
+      .wide { grid-column: 1 / -1; }
+      .progress { height: 10px; border-radius: 999px; background: #e8ecea; overflow: hidden; margin: 20px 0 10px; }
+      .progress span { display: block; width: 72%; height: 100%; background: #17613a; }
+      .row { display: grid; grid-template-columns: 120px 1fr auto; gap: 16px; align-items: center; padding: 14px 0; border-top: 1px solid #edf0ee; }
+      .dot { width: 9px; height: 9px; border-radius: 50%; background: #34a56f; display: inline-block; margin-right: 8px; }
+      @media (max-width: 680px) { header { align-items: start; flex-direction: column; } .grid { grid-template-columns: 1fr; } .wide { grid-column: auto; } .row { grid-template-columns: 1fr; } }
+    </style>
+  </head>
+  <body>
+    <main>
+      <header>
+        <div>
+          <p class="muted">Weekly project brief · 18 July</p>
+          <h1>Northstar</h1>
+          <p class="muted">A compact, self-contained status page for stakeholder review.</p>
+        </div>
+        <span class="badge"><span class="dot"></span>On track</span>
+      </header>
+
+      <section class="grid" aria-label="Project metrics">
+        <article class="card"><h2>Completion</h2><p class="metric">72%</p><p class="muted">+9 points this week</p></article>
+        <article class="card"><h2>Open decisions</h2><p class="metric">3</p><p class="muted">Two need product input</p></article>
+        <article class="card"><h2>Next milestone</h2><p class="metric">8d</p><p class="muted">Private beta handoff</p></article>
+
+        <article class="card wide">
+          <h2>Milestone progress</h2>
+          <div class="progress" aria-label="72 percent complete"><span></span></div>
+          <p class="muted">Core workflow and access controls are complete. The team is finishing onboarding, observability, and launch documentation.</p>
+        </article>
+
+        <article class="card wide">
+          <h2>Workstreams</h2>
+          <div class="row"><strong>Product</strong><span>Private-link review and empty states</span><span class="badge">Review</span></div>
+          <div class="row"><strong>Platform</strong><span>Edge caching and structured event logs</span><span class="badge">Active</span></div>
+          <div class="row"><strong>Launch</strong><span>Agent quickstart and example gallery</span><span class="badge">Next</span></div>
+        </article>
+      </section>
+    </main>
+  </body>
+</html>

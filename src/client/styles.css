@@ -202,6 +202,175 @@ button {
 }
 
 /* ---------------------------------------------------------------------------
+ * Acquisition pages and product referral loop
+ * -------------------------------------------------------------------------- */
+
+.marketing-card-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.marketing-card {
+  display: flex;
+  min-height: 132px;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: 20px;
+  padding: 20px;
+  color: var(--foreground);
+  text-decoration: none;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--surface);
+  transition: border-color 140ms ease, transform 140ms ease;
+}
+
+.marketing-card:hover {
+  border-color: color-mix(in oklch, var(--accent) 52%, var(--border));
+  transform: translateY(-2px);
+}
+
+.marketing-card strong {
+  font-size: 1rem;
+}
+
+.marketing-card span {
+  max-width: 30rem;
+  color: var(--muted);
+  font-size: 0.875rem;
+  line-height: 1.55;
+}
+
+.marketing-page {
+  padding: 58px 0 20px;
+}
+
+.marketing-hero {
+  max-width: 850px;
+  padding-bottom: 54px;
+}
+
+.marketing-hero h1 {
+  max-width: 830px;
+  margin: 0;
+  color: var(--foreground);
+  font-size: clamp(2.75rem, 8vw, 5.6rem);
+  font-weight: 760;
+  letter-spacing: -0.065em;
+  line-height: 0.98;
+}
+
+.marketing-lead {
+  max-width: 720px;
+  margin: 26px 0 0;
+  color: var(--muted);
+  font-size: clamp(1.05rem, 2vw, 1.3rem);
+  line-height: 1.7;
+}
+
+.marketing-actions,
+.marketing-resource-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 28px;
+}
+
+.marketing-sections {
+  border-top: 1px solid var(--border);
+}
+
+.marketing-section {
+  display: grid;
+  grid-template-columns: 72px minmax(0, 720px);
+  gap: 22px;
+  padding: 44px 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.marketing-section-number {
+  margin: 5px 0 0;
+  color: var(--muted);
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+}
+
+.marketing-section h2,
+.marketing-footer-cta h2 {
+  margin: 0 0 18px;
+  color: var(--foreground);
+  font-size: clamp(1.55rem, 3vw, 2.25rem);
+  letter-spacing: -0.035em;
+  line-height: 1.15;
+}
+
+.marketing-section p,
+.marketing-section li {
+  color: var(--muted);
+  line-height: 1.7;
+}
+
+.marketing-section ul {
+  display: grid;
+  gap: 8px;
+  margin: 22px 0 0;
+  padding-left: 20px;
+}
+
+.marketing-section pre {
+  max-width: 100%;
+  margin: 24px 0 0;
+  padding: 18px;
+  overflow-x: auto;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--surface-alt);
+  color: var(--foreground);
+  font: 0.82rem/1.65 var(--font-mono);
+  white-space: pre-wrap;
+}
+
+.marketing-footer-cta,
+.share-referral {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+  margin-top: 44px;
+  padding: 24px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--surface-alt);
+}
+
+.marketing-footer-cta h2,
+.share-referral p {
+  margin-bottom: 0;
+}
+
+.share-referral {
+  margin: 0;
+}
+
+@media (max-width: 680px) {
+  .marketing-card-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .marketing-section {
+    grid-template-columns: 1fr;
+    gap: 8px;
+  }
+
+  .marketing-footer-cta,
+  .share-referral {
+    align-items: stretch;
+    flex-direction: column;
+  }
+}
+
+/* ---------------------------------------------------------------------------
  * Publish progress animation (three pulsing bars)
  * -------------------------------------------------------------------------- */
 

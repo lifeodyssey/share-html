@@ -1,9 +1,8 @@
 import { LLMS_TXT } from "./constants.ts";
 import { getShareBySlug, toPublicShare } from "./db.ts";
-import { withDiscoveryHeaders, jsonResponse } from "./http.ts";
+import { withDiscoveryHeaders } from "./http.ts";
 import { createShareRecord } from "./shares.ts";
 import { errorMessage } from "./utils.ts";
-import { mcpServerCard } from "./discovery.ts";
 
 type Env = {
   ASSETS: Fetcher;
@@ -13,6 +12,8 @@ type Env = {
   SUPABASE_PUBLISHABLE_KEY: string;
   SUPABASE_REST_KEY: string;
   WORKER_API_SECRET: string;
+  SHARE_ACCESS_PEPPER_V1: string;
+  PREVIEW_GRANT_SIGNING_KEY_V1: string;
   SUPABASE_SEND_EMAIL_HOOK_SECRET?: string;
   AUTH_EMAIL_FROM?: string;
   AUTH_EMAIL_FROM_NAME?: string;
@@ -24,36 +25,72 @@ type Env = {
 };
 
 const JSON_HEADERS = {
-  "content-type": "application/json; charset=utf-8"
+  "content-type": "application/json; charset=utf-8",
+  "cache-control": "no-store",
 };
+
+const MCP_PROTOCOL_VERSION = "2025-11-25";
+const SUPPORTED_MCP_PROTOCOL_VERSIONS = new Set([
+  "2025-03-26",
+  "2025-06-18",
+  MCP_PROTOCOL_VERSION,
+]);
 
 export async function handleMcpRequest(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
   if (request.method === "GET" || request.method === "HEAD") {
-    return withDiscoveryHeaders(jsonResponse(mcpServerCard(), "application/json; charset=utf-8", request.method));
+    return withDiscoveryHeaders(new Response(null, {
+      status: 405,
+      headers: { Allow: "POST" },
+    }));
   }
 
   if (request.method !== "POST") {
-    return withDiscoveryHeaders(new Response("Method Not Allowed", { status: 405, headers: { Allow: "GET, HEAD, POST" } }));
+    return withDiscoveryHeaders(new Response("Method Not Allowed", { status: 405, headers: { Allow: "POST" } }));
+  }
+
+  const origin = request.headers.get("origin");
+  if (origin && origin !== new URL(request.url).origin) {
+    return withDiscoveryHeaders(new Response("Forbidden", { status: 403 }));
+  }
+
+  const requestedVersion = request.headers.get("mcp-protocol-version");
+  if (requestedVersion && !SUPPORTED_MCP_PROTOCOL_VERSIONS.has(requestedVersion)) {
+    return mcpJson({
+      jsonrpc: "2.0",
+      id: null,
+      error: { code: -32600, message: "Unsupported MCP protocol version." },
+    }, 400);
   }
 
   let payload: unknown;
   try {
     payload = await request.json();
   } catch {
-    return mcpJson({ id: null, error: { code: -32700, message: "Parse error" } });
+    return mcpJson({ jsonrpc: "2.0", id: null, error: { code: -32700, message: "Parse error" } });
   }
 
   if (Array.isArray(payload)) {
-    const responses = (await Promise.all(payload.map((message) => handleMcpMessage(message, request, env, ctx)))).filter(Boolean);
-    return mcpJson(responses);
+    return mcpJson({
+      jsonrpc: "2.0",
+      id: null,
+      error: { code: -32600, message: "JSON-RPC batching is not supported." },
+    }, 400);
   }
 
-  return mcpJson(await handleMcpMessage(payload, request, env, ctx));
+  if (isJsonRpcResponse(payload)) {
+    return withDiscoveryHeaders(new Response(null, { status: 202 }));
+  }
+
+  const response = await handleMcpMessage(payload, request, env, ctx);
+  if (response === null) {
+    return withDiscoveryHeaders(new Response(null, { status: 202 }));
+  }
+  return mcpJson(response);
 }
 
 export async function handleMcpMessage(message: unknown, request: Request, env: Env, ctx: ExecutionContext): Promise<Record<string, unknown> | null> {
   if (!isJsonRpcRequest(message)) {
-    return { id: null, error: { code: -32600, message: "Invalid Request" } };
+    return { jsonrpc: "2.0", id: null, error: { code: -32600, message: "Invalid Request" } };
   }
 
   if (!("id" in message)) return null;
@@ -62,7 +99,7 @@ export async function handleMcpMessage(message: unknown, request: Request, env: 
     switch (message.method) {
       case "initialize":
         return mcpResult(message.id, {
-          protocolVersion: "2024-11-05",
+          protocolVersion: negotiatedProtocolVersion(message.params),
           capabilities: { tools: {} },
           serverInfo: { name: "Share HTML", version: "0.1.0" }
         });
@@ -78,8 +115,28 @@ export async function handleMcpMessage(message: unknown, request: Request, env: 
   }
 }
 
-export function isJsonRpcRequest(value: unknown): value is { id?: unknown; method: string; params?: unknown } {
-  return typeof value === "object" && value !== null && typeof (value as { method?: unknown }).method === "string";
+export function isJsonRpcRequest(value: unknown): value is { jsonrpc: "2.0"; id?: unknown; method: string; params?: unknown } {
+  return typeof value === "object" &&
+    value !== null &&
+    !Array.isArray(value) &&
+    (value as { jsonrpc?: unknown }).jsonrpc === "2.0" &&
+    typeof (value as { method?: unknown }).method === "string";
+}
+
+function isJsonRpcResponse(value: unknown): boolean {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return false;
+  const message = value as { jsonrpc?: unknown; id?: unknown; result?: unknown; error?: unknown };
+  return message.jsonrpc === "2.0" && "id" in message &&
+    (("result" in message) !== ("error" in message));
+}
+
+function negotiatedProtocolVersion(params: unknown): string {
+  const requested = params && typeof params === "object"
+    ? (params as { protocolVersion?: unknown }).protocolVersion
+    : undefined;
+  return typeof requested === "string" && SUPPORTED_MCP_PROTOCOL_VERSIONS.has(requested)
+    ? requested
+    : MCP_PROTOCOL_VERSION;
 }
 
 export function mcpResult(id: unknown, result: Record<string, unknown>): Record<string, unknown> {
@@ -107,12 +164,17 @@ export function mcpTools() {
     }
     ,{
       name: "create_share",
-      description: "Publish/host/share a single HTML page. Uploads an HTML document and returns a public sandboxed shareable URL. Use when the user wants to share, host, or get a link for an HTML file or page.",
+      description: "Publish one HTML page as either an unlisted or access-key protected sandboxed share.",
       inputSchema: {
         type: "object",
         properties: {
           html: { type: "string", description: "The full HTML document to publish." },
-          title: { type: "string", description: "Optional title for the share." }
+          title: { type: "string", description: "Optional title for the share." },
+          visibility: {
+            type: "string",
+            enum: ["public_unlisted", "private_link"],
+            description: "Defaults to public_unlisted. private_link returns a one-time accessKey."
+          }
         },
         required: ["html"],
         additionalProperties: false
@@ -141,7 +203,7 @@ export async function handleMcpToolCall(
     }
 
     const share = await getShareBySlug(env, slug);
-    if (!share || share.deleted_at) {
+    if (!share || share.deleted_at || share.visibility !== "public_unlisted") {
       return mcpResult(id, { isError: true, content: [{ type: "text", text: "Share not found." }] });
     }
 
@@ -161,7 +223,25 @@ export async function handleMcpToolCall(
       return mcpResult(id, { isError: true, content: [{ type: "text", text: "Missing required 'html'." }] });
     }
     const title = typeof call.arguments?.title === "string" ? call.arguments.title : "";
-    const result = await createShareRecord(env, ctx, request, { html, title, user: null });
+    const rawVisibility = call.arguments?.visibility;
+    if (
+      rawVisibility !== undefined &&
+      rawVisibility !== "public_unlisted" &&
+      rawVisibility !== "private_link"
+    ) {
+      return mcpResult(id, {
+        isError: true,
+        content: [{ type: "text", text: "visibility must be public_unlisted or private_link." }]
+      });
+    }
+    const visibility = rawVisibility === "private_link" ? "private_link" : "public_unlisted";
+    const result = await createShareRecord(env, ctx, request, {
+      html,
+      title,
+      user: null,
+      visibility,
+      source: "mcp",
+    });
     return mcpResult(id, {
       isError: result.status >= 400,
       content: [{ type: "text", text: JSON.stringify(result.body, null, 2) }]
@@ -171,7 +251,9 @@ export async function handleMcpToolCall(
   return mcpResult(id, { isError: true, content: [{ type: "text", text: "Unknown tool." }] });
 }
 
-export function mcpJson(body: unknown): Response {
-  return withDiscoveryHeaders(new Response(JSON.stringify(body, null, 2), { headers: JSON_HEADERS }));
+export function mcpJson(body: unknown, status = 200): Response {
+  return withDiscoveryHeaders(new Response(JSON.stringify(body, null, 2), {
+    status,
+    headers: JSON_HEADERS,
+  }));
 }
-

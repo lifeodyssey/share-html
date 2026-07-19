@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Aster Lamp — Product Concept</title>
+    <style>
+      :root { font-family: Inter, ui-sans-serif, system-ui, sans-serif; color: #231b17; background: #eee9e2; }
+      * { box-sizing: border-box; }
+      body { margin: 0; min-height: 100vh; display: grid; place-items: center; padding: 24px; }
+      main { width: min(1040px, 100%); background: #fbf8f3; border: 1px solid #ddd4c8; border-radius: 28px; overflow: hidden; display: grid; grid-template-columns: 1.08fr .92fr; box-shadow: 0 28px 80px #6d59451f; }
+      .visual { min-height: 620px; display: grid; place-items: center; background: radial-gradient(circle at 50% 42%, #fff6c9 0 18%, #dfb953 19% 20%, transparent 21%), linear-gradient(145deg, #426057, #152b26); position: relative; }
+      .visual::before { content: ""; width: 210px; height: 300px; border: 2px solid #f0d67b; border-radius: 50% 50% 42% 42%; box-shadow: inset 0 0 70px #ffe79488, 0 0 80px #f0ca6066; }
+      .visual::after { content: "ASTER / 01"; position: absolute; left: 26px; bottom: 24px; color: #e9efe9; font: 700 12px ui-monospace, monospace; letter-spacing: .14em; }
+      .copy { padding: clamp(30px, 6vw, 72px); display: flex; flex-direction: column; justify-content: center; }
+      .kicker { font-size: .75rem; font-weight: 750; letter-spacing: .15em; text-transform: uppercase; color: #806c5d; }
+      h1 { font-family: Georgia, serif; font-size: clamp(3.4rem, 8vw, 6rem); line-height: .9; letter-spacing: -.06em; margin: 20px 0 26px; font-weight: 500; }
+      p { color: #66584f; line-height: 1.7; }
+      .price { margin: 28px 0; font-size: 1.5rem; color: #231b17; }
+      ul { list-style: none; padding: 0; display: grid; gap: 10px; color: #66584f; }
+      li::before { content: "—"; color: #a38141; margin-right: 10px; }
+      button { margin-top: 30px; border: 0; border-radius: 999px; background: #231b17; color: #fff; padding: 15px 22px; font-weight: 750; font-size: 1rem; }
+      @media (max-width: 760px) { main { grid-template-columns: 1fr; } .visual { min-height: 420px; } }
+    </style>
+  </head>
+  <body>
+    <main>
+      <section class="visual" aria-label="Glowing green Aster lamp concept"></section>
+      <section class="copy">
+        <span class="kicker">Ambient collection · concept 01</span>
+        <h1>Aster</h1>
+        <p>A low, warm pool of light for late reading and slower evenings. The hand-finished ceramic shell hides a dimmable, repairable LED core.</p>
+        <p class="price">Concept price · $240</p>
+        <ul>
+          <li>Three warmth settings</li>
+          <li>Replaceable light engine</li>
+          <li>Recycled aluminum base</li>
+        </ul>
+        <button type="button">Join the concept preview</button>
+      </section>
+    </main>
+  </body>
+</html>

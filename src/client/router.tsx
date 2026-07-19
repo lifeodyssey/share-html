@@ -4,6 +4,8 @@
  * Route structure:
  *   /          → HomePage  (rendered inside root layout)
  *   /s/$slug   → SharePage (rendered inside root layout)
+ *   First-party acquisition pages are explicit static routes so the Worker can
+ *   serve matching crawlable HTML instead of an unknown-route SPA fallback.
  *
  * The root route renders the persistent <Header> (from session.tsx) and an
  * <Outlet> for the matched child route.  Navigation happens through <Link>
@@ -27,7 +29,7 @@ import { Header } from "./session";
 // the routeTree — see the bottom of main.tsx where these routes are wired.
 // We import them directly because they are plain React components and ESM
 // handles the cycle safely (both files are fully evaluated before rendering).
-import { HomePage, SharePage } from "./main";
+import { HomePage, MarketingPageView, SharePage } from "./main";
 
 // ---------------------------------------------------------------------------
 // Root route – always-on layout
@@ -59,10 +61,41 @@ const shareRoute = createRoute({
   component: SharePage,
 });
 
+const htmlPreviewRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/html-preview",
+  component: () => <MarketingPageView path="/html-preview" />,
+});
+
+const privateHtmlSharingRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/private-html-sharing",
+  component: () => <MarketingPageView path="/private-html-sharing" />,
+});
+
+const examplesRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/examples",
+  component: () => <MarketingPageView path="/examples" />,
+});
+
+const agentsRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/agents",
+  component: () => <MarketingPageView path="/agents" />,
+});
+
 // ---------------------------------------------------------------------------
 // Assemble the tree and create the router
 // ---------------------------------------------------------------------------
-const routeTree = rootRoute.addChildren([indexRoute, shareRoute]);
+const routeTree = rootRoute.addChildren([
+  indexRoute,
+  shareRoute,
+  htmlPreviewRoute,
+  privateHtmlSharingRoute,
+  examplesRoute,
+  agentsRoute,
+]);
 
 export const router = createRouter({ routeTree });
 

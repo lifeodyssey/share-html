@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Activation Brief — Q2</title>
+    <style>
+      :root { font-family: Inter, ui-sans-serif, system-ui, sans-serif; color: #182031; background: #f1f4fa; }
+      * { box-sizing: border-box; }
+      body { margin: 0; padding: 30px 18px 60px; }
+      main { width: min(900px, 100%); margin: auto; }
+      header { padding: 34px 0 28px; border-bottom: 2px solid #182031; display: flex; justify-content: space-between; gap: 24px; align-items: end; }
+      h1 { margin: 0; font-size: clamp(2.6rem, 8vw, 5.5rem); line-height: .95; letter-spacing: -.07em; }
+      .stamp { font: 700 12px ui-monospace, monospace; text-transform: uppercase; letter-spacing: .12em; color: #5d6b89; }
+      section { background: #fff; border: 1px solid #dce2ef; border-radius: 18px; margin-top: 18px; padding: clamp(22px, 5vw, 42px); }
+      h2 { margin: 0 0 20px; font-size: 1rem; text-transform: uppercase; letter-spacing: .11em; }
+      p { color: #5d6678; line-height: 1.7; }
+      .metrics { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
+      .metric { border-left: 4px solid #4d67d7; padding: 10px 16px; }
+      .metric strong { display: block; font-size: 2.8rem; letter-spacing: -.05em; }
+      .metric span { color: #687289; font-size: .9rem; }
+      .bar { display: grid; grid-template-columns: 120px 1fr 48px; gap: 14px; align-items: center; margin: 16px 0; }
+      .track { height: 14px; background: #e9edf6; border-radius: 4px; overflow: hidden; }
+      .track i { display: block; height: 100%; background: #4d67d7; }
+      .takeaway { border-color: #cbd4fa; background: #eef1ff; }
+      .takeaway p { color: #27335f; font-size: 1.15rem; }
+      @media (max-width: 650px) { header { flex-direction: column; align-items: start; } .metrics { grid-template-columns: 1fr; } .bar { grid-template-columns: 90px 1fr 38px; } }
+    </style>
+  </head>
+  <body>
+    <main>
+      <header>
+        <div><span class="stamp">Research note 04</span><h1>Activation brief</h1></div>
+        <span class="stamp">Q2 · Sample data</span>
+      </header>
+
+      <section>
+        <h2>Executive summary</h2>
+        <p>Visitors who reached the uploader from a concrete example were more likely to finish a share. The strongest next move is to shorten time-to-first-file, then make every shared wrapper a clear route back to the product.</p>
+        <div class="metrics">
+          <div class="metric"><strong>34%</strong><span>example-to-upload lift</span></div>
+          <div class="metric"><strong>2.1×</strong><span>return from shared links</span></div>
+          <div class="metric"><strong>48s</strong><span>median first share</span></div>
+        </div>
+      </section>
+
+      <section>
+        <h2>Activation by entry point</h2>
+        <div class="bar"><span>Examples</span><div class="track"><i style="width: 78%"></i></div><strong>78</strong></div>
+        <div class="bar"><span>Search</span><div class="track"><i style="width: 61%"></i></div><strong>61</strong></div>
+        <div class="bar"><span>Direct</span><div class="track"><i style="width: 45%"></i></div><strong>45</strong></div>
+        <p>Illustrative values only. Replace this section with data from your own research or agent-generated analysis.</p>
+      </section>
+
+      <section class="takeaway">
+        <h2>Recommended decision</h2>
+        <p>Ship a first-party example gallery, preserve source attribution through upload, and place a single product CTA below every wrapper preview.</p>
+      </section>
+    </main>
+  </body>
+</html>

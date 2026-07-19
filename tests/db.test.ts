@@ -188,6 +188,9 @@ function makeShareRecord(overrides: Record<string, unknown> = {}): any {
     id: "share-uuid",
     slug: "TestSlug",
     owner_user_id: null,
+    visibility: "public_unlisted",
+    access_key_hash: null,
+    access_key_version: null,
     title: "Test Title",
     lifecycle_status: "active",
     moderation_status: "clean",
@@ -264,6 +267,22 @@ test("toPublicShare: preview_url uses PREVIEW_ORIGIN env when set", () => {
   assert.equal(result.preview_url, "https://preview.example.com/v/myslug/");
 });
 
+test("toPublicShare: private preview stays on APP_ORIGIN so its host-only grant cookie works", () => {
+  const share = makeShareRecord({
+    slug: "myslug",
+    visibility: "private_link",
+    access_key_hash: "a".repeat(64),
+    access_key_version: 1,
+  });
+  const req = new Request("https://worker.example.com/");
+  const env = makeEnv({
+    APP_ORIGIN: "https://app.example.com",
+    PREVIEW_ORIGIN: "https://preview.example.com",
+  });
+  const result = toPublicShare(share, req, env);
+  assert.equal(result.preview_url, "https://app.example.com/v/myslug/");
+});
+
 test("toPublicShare: preview_url falls back to request origin when PREVIEW_ORIGIN not set", () => {
   const share = makeShareRecord({ slug: "myslug" });
   const req = new Request("https://request.example.com/");
@@ -272,7 +291,7 @@ test("toPublicShare: preview_url falls back to request origin when PREVIEW_ORIGI
   assert.equal(result.preview_url, "https://request.example.com/v/myslug/");
 });
 
-test("toPublicShare: expires_at, created_at, size_bytes, owner_user_id are passed through", () => {
+test("toPublicShare: exposes exactly the safe public metadata projection", () => {
   const share = makeShareRecord({
     expires_at: "2025-01-01T00:00:00.000Z",
     created_at: "2024-06-01T00:00:00.000Z",
@@ -284,7 +303,22 @@ test("toPublicShare: expires_at, created_at, size_bytes, owner_user_id are passe
   assert.equal(result.expires_at, "2025-01-01T00:00:00.000Z");
   assert.equal(result.created_at, "2024-06-01T00:00:00.000Z");
   assert.equal(result.size_bytes, 2048);
-  assert.equal(result.owner_user_id, "user-abc");
+  assert.equal(result.visibility, "public_unlisted");
+  assert.deepEqual(Object.keys(result).sort(), [
+    "created_at",
+    "expires_at",
+    "id",
+    "lifecycle_status",
+    "moderation_status",
+    "preview_url",
+    "risk_reasons",
+    "risk_score",
+    "share_url",
+    "size_bytes",
+    "slug",
+    "title",
+    "visibility",
+  ].sort());
 });
 
 test("toPublicShare: risk_score and risk_reasons are passed through", () => {

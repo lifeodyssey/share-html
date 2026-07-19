@@ -20,7 +20,9 @@
     "typecheck": "tsc --noEmit",
     "deploy": "npm run build && wrangler deploy",
     "cf:whoami": "wrangler whoami",
-    "cf:types": "wrangler types"
+    "cf:types": "wrangler types",
+    "growth:indexnow": "node scripts/submit-indexnow.mjs",
+    "growth:indexnow:dry-run": "node scripts/submit-indexnow.mjs --dry-run"
   },
   "dependencies": {
     "@heroui/react": "^3.1.0",

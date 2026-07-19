@@ -15,6 +15,8 @@ import {
   deleteShare,
   claimShare,
   fetchPublicShare,
+  accessShare,
+  rotateShareAccessKey,
   reportShare,
 } from "../../src/client/api.ts";
 
@@ -87,7 +89,7 @@ test("uploadShare: POST /api/shares with form data and no auth header when no to
   const { captured } = stubFetch(okJson(payload));
   const file = new File(["<h1>hi</h1>"], "index.html", { type: "text/html" });
 
-  await uploadShare(file, "My Share");
+  await uploadShare(file, "My Share", "public_unlisted");
 
   assert.equal(captured().url, "/api/shares");
   assert.equal(captured().init?.method, "POST");
@@ -95,32 +97,35 @@ test("uploadShare: POST /api/shares with form data and no auth header when no to
   const body = captured().init?.body as FormData;
   assert.ok(body instanceof FormData);
   assert.equal(body.get("title"), "My Share");
+  assert.equal(body.get("visibility"), "public_unlisted");
   assert.equal((body.get("file") as File).name, "index.html");
 });
 
-test("uploadShare: includes Bearer authorization header when accessToken provided", async () => {
+test("uploadShare: includes auth and a safe acquisition source when provided", async () => {
   const payload = { share: { id: "s2", slug: "xyz" }, claimToken: null, message: "ok" };
   const { captured } = stubFetch(okJson(payload));
   const file = new File(["<p>hi</p>"], "index.html", { type: "text/html" });
 
-  await uploadShare(file, "Auth Share", "my-token");
+  await uploadShare(file, "Auth Share", "private_link", "my-token", "shared_preview");
 
   const headers = captured().init?.headers as Record<string, string>;
   assert.equal(headers.authorization, "Bearer my-token");
+  assert.equal((captured().init?.body as FormData).get("visibility"), "private_link");
+  assert.equal((captured().init?.body as FormData).get("source"), "shared_preview");
 });
 
 test("uploadShare: throws with error message when response is not ok", async () => {
   stubFetch(errJson({ error: "File too large" }));
   const file = new File(["x"], "index.html", { type: "text/html" });
 
-  await assert.rejects(uploadShare(file, ""), /File too large/);
+  await assert.rejects(uploadShare(file, "", "public_unlisted"), /File too large/);
 });
 
 test("uploadShare: falls back to 'Upload failed' when no error field", async () => {
   stubFetch(errJson({}));
   const file = new File(["x"], "index.html", { type: "text/html" });
 
-  await assert.rejects(uploadShare(file, ""), /Upload failed/);
+  await assert.rejects(uploadShare(file, "", "public_unlisted"), /Upload failed/);
 });
 
 // ---------------------------------------------------------------------------
@@ -220,6 +225,58 @@ test("fetchPublicShare: throws when response is not ok", async () => {
 test("fetchPublicShare: throws when share field is missing even on 200", async () => {
   stubFetch(okJson({}));
   await assert.rejects(fetchPublicShare("slug"), /Share not found/);
+});
+
+// ---------------------------------------------------------------------------
+// private share access
+// ---------------------------------------------------------------------------
+
+test("accessShare: sends the access key in a JSON body and requests same-origin credentials", async () => {
+  const share = { id: "private-1", slug: "locked" };
+  const { captured } = stubFetch(okJson({ share }));
+
+  const result = await accessShare("locked", "secret-access-key");
+
+  assert.equal(captured().url, "/api/shares/locked/access");
+  assert.equal(captured().init?.method, "POST");
+  assert.equal(captured().init?.credentials, "same-origin");
+  assert.deepEqual(JSON.parse(captured().init?.body as string), {
+    accessKey: "secret-access-key",
+  });
+  assert.equal((captured().init?.headers as Record<string, string>).authorization, undefined);
+  assert.deepEqual(result, share);
+});
+
+test("accessShare: lets an owner unlock without placing credentials in the URL", async () => {
+  const { captured } = stubFetch(okJson({ share: { id: "private-1" } }));
+
+  await accessShare("locked", undefined, "owner-jwt");
+
+  assert.equal(captured().url, "/api/shares/locked/access");
+  assert.equal((captured().init?.headers as Record<string, string>).authorization, "Bearer owner-jwt");
+  assert.deepEqual(JSON.parse(captured().init?.body as string), {});
+});
+
+test("accessShare: preserves the worker error code", async () => {
+  stubFetch(errJson({ error: "Invalid access key.", code: "invalid_share_access_key" }, 403));
+
+  await assert.rejects(
+    accessShare("locked", "wrong"),
+    (error: unknown) => error instanceof Error &&
+      "code" in error && error.code === "invalid_share_access_key"
+  );
+});
+
+test("rotateShareAccessKey: POSTs to the owner-only rotation endpoint", async () => {
+  const payload = { share: { id: "private-1" }, accessKey: "new-key" };
+  const { captured } = stubFetch(okJson(payload));
+
+  const result = await rotateShareAccessKey("private-1", "owner-jwt");
+
+  assert.equal(captured().url, "/api/shares/private-1/access-key");
+  assert.equal(captured().init?.method, "POST");
+  assert.equal((captured().init?.headers as Record<string, string>).authorization, "Bearer owner-jwt");
+  assert.deepEqual(result, payload);
 });
 
 // ---------------------------------------------------------------------------

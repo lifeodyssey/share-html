@@ -3,42 +3,95 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta name="description" content="Upload a single HTML file and share it as a sandboxed live preview." />
-    <link rel="canonical" href="https://sharehtml.zhenjia.dev" />
+    <!-- share-html:seo:start -->
+    <meta name="description" content="Upload one self-contained HTML file and share it in a sandboxed preview with an unlisted public link or an access-key-protected private link." />
+    <link rel="canonical" href="https://sharehtml.zhenjia.dev/" />
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="Share HTML" />
+    <meta property="og:url" content="https://sharehtml.zhenjia.dev/" />
+    <meta property="og:title" content="Share HTML — Upload and Share Sandboxed HTML Previews" />
+    <meta property="og:description" content="Upload one HTML file and share it with an unlisted public link or an access-key-protected private link." />
+    <meta property="og:image" content="https://sharehtml.zhenjia.dev/og.png" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:image:type" content="image/png" />
+    <meta property="og:image:alt" content="Share HTML: one HTML file, one sandboxed link" />
+    <meta property="og:locale" content="en_US" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="Share HTML — Upload and Share Sandboxed HTML Previews" />
+    <meta name="twitter:description" content="Share one HTML file with an unlisted public link or an access-key-protected private link." />
+    <meta name="twitter:image" content="https://sharehtml.zhenjia.dev/og.png" />
+    <meta name="twitter:image:alt" content="Share HTML: one HTML file, one sandboxed link" />
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@graph": [
+        {
+          "@type": "WebSite",
+          "@id": "https://sharehtml.zhenjia.dev/#website",
+          "url": "https://sharehtml.zhenjia.dev/",
+          "name": "Share HTML",
+          "description": "Upload and share sandboxed previews of self-contained HTML files."
+        },
+        {
+          "@type": "WebApplication",
+          "@id": "https://sharehtml.zhenjia.dev/#app",
+          "url": "https://sharehtml.zhenjia.dev/",
+          "name": "Share HTML",
+          "isPartOf": { "@id": "https://sharehtml.zhenjia.dev/#website" },
+          "applicationCategory": "DeveloperApplication",
+          "operatingSystem": "Any operating system with a modern web browser",
+          "offers": { "@type": "Offer", "price": 0, "priceCurrency": "USD" },
+          "description": "Upload one self-contained HTML file and share it in a sandboxed preview with an unlisted public link or an access-key-protected private link.",
+          "featureList": [
+            "Sandboxed single-file HTML previews",
+            "Unlisted public links",
+            "Access-key-protected private links",
+            "OpenAPI, WebMCP, and MCP discovery"
+          ],
+          "softwareHelp": {
+            "@type": "CreativeWork",
+            "url": "https://sharehtml.zhenjia.dev/llms.txt"
+          }
+        }
+      ]
+    }
+    </script>
+    <title>Share HTML — Upload and Share Sandboxed HTML Previews</title>
+    <!-- share-html:seo:end -->
     <link rel="sitemap" href="/sitemap.xml" />
     <link rel="alternate" type="text/markdown" href="/llms.txt" title="AI-readable site guide" />
     <link rel="api-catalog" href="/.well-known/api-catalog" />
     <link rel="icon" href="/logo.svg" type="image/svg+xml" />
-    <meta property="og:type" content="website" />
-    <meta property="og:url" content="https://sharehtml.zhenjia.dev" />
-    <meta property="og:title" content="Share HTML" />
-    <meta property="og:description" content="Upload one HTML file and share it as a sandboxed live preview." />
-    <meta name="twitter:card" content="summary" />
-    <script type="application/ld+json">
-    {
-      "@context": "https://schema.org",
-      "@type": "WebApplication",
-      "name": "Share HTML",
-      "url": "https://sharehtml.zhenjia.dev",
-      "applicationCategory": "DeveloperApplication",
-      "operatingSystem": "Web",
-      "offers": { "@type": "Offer", "price": "0", "priceCurrency": "USD" },
-      "description": "Upload one HTML file and share it as a sandboxed live preview.",
-      "potentialAction": { "@type": "CreateAction", "target": "https://sharehtml.zhenjia.dev/api/shares" }
-    }
-    </script>
-    <title>Share HTML</title>
   </head>
   <body>
     <div id="root">
       <!-- share-html:fallback:start -->
       <main>
-        <h1>Share HTML — upload one HTML file, get a sandboxed shareable link</h1>
-        <p>Upload a single self-contained HTML file and get a public, sandboxed preview URL. No signup required; anonymous uploads are kept for 365 days.</p>
-        <h2>Use it programmatically</h2>
-        <pre>curl -X POST https://sharehtml.zhenjia.dev/api/shares -F "file=@page.html" -F "title=My page"
-# returns JSON: { "share": { "share_url", "preview_url", "slug", "id" }, "claimToken" }</pre>
-        <p>Full API: <a href="/openapi.json">/openapi.json</a> · AI guide: <a href="/llms.txt">/llms.txt</a> · MCP: <a href="/mcp">/mcp</a></p>
+        <h1>Upload one HTML file. Share one sandboxed preview.</h1>
+        <p>Share HTML hosts a self-contained <code>.html</code> or <code>.htm</code> file behind a sandboxed preview. No signup is required; anonymous uploads expire after 365 days.</p>
+        <h2>Choose how the link opens</h2>
+        <ul>
+          <li><strong>Public unlisted</strong> — anyone with the link can open the share metadata and preview. Share URLs are never added to the sitemap.</li>
+          <li><strong>Private link</strong> — the returned share URL carries its access key in a client-side <code>#key=</code> fragment. Unlocking sets short-lived, path-scoped HttpOnly metadata and preview grants; treat the whole URL as a secret.</li>
+        </ul>
+        <h2>Create a share with the API</h2>
+        <pre><code># Public unlisted (the default)
+curl -X POST https://sharehtml.zhenjia.dev/api/shares \
+  -F "file=@page.html" -F "title=My page"
+
+# Access-key-protected private link
+curl -X POST https://sharehtml.zhenjia.dev/api/shares \
+  -F "file=@page.html" -F "visibility=private_link"
+# The private response includes accessKey and a share_url with #key=...</code></pre>
+        <p>Read the <a href="/openapi.json">OpenAPI description</a>, <a href="/llms.txt">AI-readable guide</a>, or <a href="/.well-known/webmcp.json">WebMCP manifest</a>. MCP is available at <a href="/mcp">/mcp</a>.</p>
+        <h2>Choose a starting point</h2>
+        <ul>
+          <li><a href="/html-preview">How to share an HTML preview online</a></li>
+          <li><a href="/private-html-sharing">How access-key-protected HTML sharing works</a></li>
+          <li><a href="/examples">Self-contained HTML examples</a></li>
+          <li><a href="/agents">MCP, OpenAPI, and HTTP quickstart for agents</a></li>
+        </ul>
       </main>
       <!-- share-html:fallback:end -->
     </div>
@@ -66,7 +119,12 @@
                         "AI guide: https://sharehtml.zhenjia.dev/llms.txt",
                         "MCP endpoint: https://sharehtml.zhenjia.dev/mcp",
                         "",
-                        "Use /s/{slug} for public share metadata and /v/{slug}/ for the sandboxed uploaded HTML preview."
+                        "Visibility: public_unlisted or private_link.",
+                        "Create private links with multipart visibility=private_link; the response includes accessKey and share.share_url includes it in a client-side #key= fragment.",
+                        "Unlock private metadata with POST /api/shares/{slug}/access and JSON {\"accessKey\":\"...\"}.",
+                        "A successful unlock returns metadata and sets separate short-lived HttpOnly grants for metadata recovery and /v/{slug}/.",
+                        "GET /api/public/shares/{slug} returns 401 code=share_access_required for private links.",
+                        "Treat an access key and the complete private share URL as secrets; never move the key to a query parameter or expose it in logs or citations."
                       ].join("\n")
                     }
                   ]
@@ -74,11 +132,11 @@
               },
               {
                 name: "get_public_share",
-                description: "Fetch public metadata for a Share HTML slug.",
+                description: "Fetch metadata for a public_unlisted Share HTML slug. Private links return 401 share_access_required.",
                 inputSchema: {
                   type: "object",
                   properties: {
-                    slug: { type: "string", description: "Public Share HTML slug" }
+                    slug: { type: "string", description: "Share HTML slug" }
                   },
                   required: ["slug"],
                   additionalProperties: false
@@ -100,15 +158,51 @@
                     isError: !response.ok
                   };
                 }
-              }
-              ,{
+              },
+              {
+                name: "access_private_share",
+                description: "Unlock private_link metadata with an access key. Success sets short-lived metadata-recovery and preview grants.",
+                inputSchema: {
+                  type: "object",
+                  properties: {
+                    slug: { type: "string", description: "Private Share HTML slug" },
+                    accessKey: { type: "string", description: "Secret access key returned once when the private link was created." }
+                  },
+                  required: ["slug", "accessKey"],
+                  additionalProperties: false
+                },
+                execute: async (args) => {
+                  const slug = args && args.slug;
+                  const accessKey = args && args.accessKey;
+                  if (typeof slug !== "string" || !slug || typeof accessKey !== "string" || !accessKey) {
+                    return { content: [{ type: "text", text: "Missing required slug or accessKey." }], isError: true };
+                  }
+
+                  const response = await fetch(`/api/shares/${encodeURIComponent(slug)}/access`, {
+                    method: "POST",
+                    headers: { "content-type": "application/json" },
+                    body: JSON.stringify({ accessKey })
+                  });
+                  return {
+                    content: [{ type: "text", text: await response.text() }],
+                    isError: !response.ok
+                  };
+                }
+              },
+              {
                 name: "create_share",
-                description: "Publish/host/share a single HTML page. Returns a public sandboxed shareable URL.",
+                description: "Publish one HTML page as public_unlisted (default) or private_link. Private creation returns an accessKey once.",
                 inputSchema: {
                   type: "object",
                   properties: {
                     html: { type: "string", description: "The full HTML document to publish." },
-                    title: { type: "string", description: "Optional title." }
+                    title: { type: "string", description: "Optional title." },
+                    visibility: {
+                      type: "string",
+                      enum: ["public_unlisted", "private_link"],
+                      default: "public_unlisted",
+                      description: "Access mode for the new share."
+                    }
                   },
                   required: ["html"],
                   additionalProperties: false
@@ -121,6 +215,8 @@
                   const body = new FormData();
                   body.set("file", new Blob([html], { type: "text/html" }), "index.html");
                   if (args.title) body.set("title", String(args.title));
+                  if (args.visibility) body.set("visibility", String(args.visibility));
+                  body.set("source", "webmcp");
                   const response = await fetch("/api/shares", { method: "POST", body });
                   return {
                     content: [{ type: "text", text: await response.text() }],

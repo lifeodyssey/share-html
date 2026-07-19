@@ -1,0 +1,17 @@
+{
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+  "name": "io.github.lifeodyssey/share-html",
+  "title": "Share HTML",
+  "description": "Create sandboxed public-unlisted or access-key-protected HTML previews through a remote MCP server.",
+  "version": "0.1.0",
+  "repository": {
+    "url": "https://github.com/lifeodyssey/share-html",
+    "source": "github"
+  },
+  "remotes": [
+    {
+      "type": "streamable-http",
+      "url": "https://sharehtml.zhenjia.dev/mcp"
+    }
+  ]
+}

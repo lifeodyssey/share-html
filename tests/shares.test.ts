@@ -11,11 +11,20 @@ import {
   getPublicShare,
   reportShare,
   claimShare,
+  accessShare,
+  rotateShareAccessKey,
   deleteShare,
   listReports,
   moderateShare,
   previewShare,
 } from "../src/worker/shares.ts";
+import {
+  createMetadataGrant,
+  createPreviewGrant,
+  hashShareAccessKey,
+  metadataGrantCookieName,
+  previewGrantCookieName,
+} from "../src/worker/share-access.ts";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -26,6 +35,8 @@ function makeEnv(overrides: Record<string, unknown> = {}) {
     SUPABASE_URL: "https://proj.supabase.co",
     SUPABASE_REST_KEY: "rest-key",
     WORKER_API_SECRET: "worker-secret",
+    SHARE_ACCESS_PEPPER_V1: "share-access-pepper-v1",
+    PREVIEW_GRANT_SIGNING_KEY_V1: "preview-grant-signing-key-v1",
     SUPABASE_PUBLISHABLE_KEY: "pub-key",
     IP_HASH_SALT: "test-salt",
     SHARE_HTML_BUCKET: {
@@ -127,6 +138,16 @@ test("previewHeaders: sets content-security-policy header", () => {
   const csp = headers.get("content-security-policy") ?? "";
   assert.ok(csp.length > 0, "CSP header should be present");
   assert.ok(csp.includes("default-src"), "CSP should contain default-src directive");
+});
+
+test("previewHeaders: permits a configured preview origin to be embedded by the app origin", () => {
+  const req = new Request("https://preview.example.com/v/ABCDE12345/");
+  const env = makeEnv({ APP_ORIGIN: "https://app.example.com" });
+  const headers = previewHeaders(req, env);
+  const csp = headers.get("content-security-policy") ?? "";
+
+  assert.equal(headers.get("cross-origin-resource-policy"), "cross-origin");
+  assert.match(csp, /frame-ancestors [^;]*https:\/\/app\.example\.com/);
 });
 
 test("previewHeaders: merges extra headers into result", () => {
@@ -253,6 +274,9 @@ function makeShareRow(overrides: Record<string, unknown> = {}) {
     risk_score: 0,
     risk_reasons: [],
     claim_token_hash: null,
+    visibility: "public_unlisted",
+    access_key_hash: null,
+    access_key_version: null,
     expires_at: null,
     created_at: new Date().toISOString(),
     updated_at: new Date().toISOString(),
@@ -328,6 +352,8 @@ test("createShareRecord: happy path returns status 201 and expected body shape",
   assert.equal(result.status, 201);
   assert.ok("share" in result.body, "body should contain share");
   assert.ok("claimToken" in result.body, "body should contain claimToken");
+  assert.ok("accessKey" in result.body, "body should contain accessKey");
+  assert.equal(result.body.accessKey, null);
   assert.ok("message" in result.body, "body should contain message");
 });
 
@@ -379,6 +405,43 @@ test("createShareRecord: claimToken is null for authenticated users", async () =
 
   assert.equal(result.status, 201);
   assert.equal(result.body.claimToken, null, "authenticated user should have null claim token");
+});
+
+test("createShareRecord: private shares return the key once and persist only its hash", async () => {
+  let insertedShare: Record<string, unknown> | undefined;
+  const shareRow = makeShareRow({
+    visibility: "private_link",
+    access_key_hash: "f".repeat(64),
+    access_key_version: 1,
+  });
+  const baseFetch = makeCreateShareFetch(shareRow);
+  vi.stubGlobal("fetch", vi.fn(async (url: unknown, init?: RequestInit) => {
+    if ((init?.method ?? "GET") === "POST" && String(url).includes("shares?select=*")) {
+      insertedShare = JSON.parse(init?.body as string) as Record<string, unknown>;
+    }
+    return baseFetch(url, init);
+  }));
+  const env = makeEnv();
+
+  const result = await createShareRecord(env, makeCtx(), makeRequest(), {
+    html: MINIMAL_HTML,
+    title: "Private demo",
+    user: null,
+    visibility: "private_link",
+  });
+
+  assert.equal(result.status, 201);
+  assert.equal(typeof result.body.accessKey, "string");
+  assert.match(result.body.accessKey as string, /^[A-Za-z0-9_-]{43}$/);
+  assert.equal(insertedShare?.visibility, "private_link");
+  assert.match(insertedShare?.access_key_hash as string, /^[0-9a-f]{64}$/);
+  assert.equal(insertedShare?.access_key_hash, await hashShareAccessKey(result.body.accessKey as string, env));
+  assert.ok(!JSON.stringify(insertedShare).includes(result.body.accessKey as string));
+  const share = result.body.share as Record<string, unknown>;
+  assert.equal(share.visibility, "private_link");
+  assert.equal(share.share_url, `https://sharehtml.zhenjia.dev/s/ABCDE12345#key=${result.body.accessKey}`);
+  assert.ok(!("access_key_hash" in share));
+  assert.ok(!("owner_user_id" in share));
 });
 
 test("createShareRecord: writes to R2 bucket (put is called)", async () => {
@@ -601,6 +664,34 @@ test("createShareRecord: calls ctx.waitUntil for the event log on success", asyn
   assert.equal(ctx.waitUntil.mock.calls.length, 1, "ctx.waitUntil should be called once");
 });
 
+test("createShareRecord: records safe source and visibility in activation metadata", async () => {
+  const shareRow = makeShareRow({ visibility: "private_link" });
+  const baseFetch = makeCreateShareFetch(shareRow);
+  let eventBody: Record<string, any> | undefined;
+  vi.stubGlobal("fetch", vi.fn(async (url: unknown, init?: RequestInit) => {
+    if ((init?.method ?? "GET") === "POST" && String(url).includes("share_events")) {
+      eventBody = JSON.parse(init?.body as string);
+    }
+    return baseFetch(url, init);
+  }));
+  const ctx = makeCtx();
+
+  await createShareRecord(makeEnv(), ctx, makeRequest(), {
+    html: MINIMAL_HTML,
+    title: "Agent result",
+    user: null,
+    visibility: "private_link",
+    source: "agents",
+  });
+  await Promise.all(ctx.waitUntil.mock.calls.map(([promise]) => promise));
+
+  assert.deepEqual(eventBody?.metadata, {
+    risk_score: 0,
+    visibility: "private_link",
+    source: "agents",
+  });
+});
+
 // ---------------------------------------------------------------------------
 // createShare (HTTP handler)
 // ---------------------------------------------------------------------------
@@ -764,6 +855,179 @@ test("getPublicShare: returns 404 for a deleted share", async () => {
   const req = makeRequest();
   const res = await getPublicShare("deleted-slug", req, env);
   assert.equal(res.status, 404);
+});
+
+test("getPublicShare: private shares require an access-key exchange without leaking metadata", async () => {
+  const shareRow = makeShareRow({
+    visibility: "private_link",
+    access_key_hash: "a".repeat(64),
+    access_key_version: 1,
+    title: "Secret title",
+  });
+  vi.stubGlobal("fetch", async () => supabaseOk([shareRow]));
+
+  const res = await getPublicShare("private-slug", makeRequest(), makeEnv());
+
+  assert.equal(res.status, 401);
+  assert.equal(res.headers.get("cache-control"), "private, no-store");
+  assert.equal(res.headers.get("x-robots-tag"), "noindex, nofollow, noarchive, nosnippet, noimageindex");
+  assert.equal(res.headers.get("content-signal"), "search=no, ai-input=no, ai-train=no, use=immediate");
+  const body = await res.json() as Record<string, unknown>;
+  assert.equal(body.code, "share_access_required");
+  assert.ok(!JSON.stringify(body).includes("Secret title"));
+});
+
+test("accessShare: rejects a wrong key and returns no private metadata", async () => {
+  const env = makeEnv();
+  const expectedKey = "A".repeat(43);
+  const shareRow = makeShareRow({
+    visibility: "private_link",
+    access_key_hash: await hashShareAccessKey(expectedKey, env),
+    access_key_version: 1,
+    title: "Secret title",
+  });
+  vi.stubGlobal("fetch", async () => supabaseOk([shareRow]));
+  const request = makeRequest("https://sharehtml.zhenjia.dev/api/shares/ABCDE12345/access", {
+    method: "POST",
+    body: JSON.stringify({ accessKey: "B".repeat(43) }),
+    headers: { "content-type": "application/json" },
+  });
+
+  const res = await accessShare("ABCDE12345", request, env, makeCtx());
+
+  assert.equal(res.status, 403);
+  const body = await res.json() as Record<string, unknown>;
+  assert.equal(body.code, "invalid_share_access_key");
+  assert.ok(!JSON.stringify(body).includes("Secret title"));
+  assert.equal(res.headers.get("set-cookie"), null);
+});
+
+test("accessShare: a correct key returns metadata and a path-scoped preview cookie", async () => {
+  const env = makeEnv();
+  const accessKey = "A".repeat(43);
+  const shareRow = makeShareRow({
+    visibility: "private_link",
+    access_key_hash: await hashShareAccessKey(accessKey, env),
+    access_key_version: 1,
+  });
+  vi.stubGlobal("fetch", async () => supabaseOk([shareRow]));
+  const ctx = makeCtx();
+  const request = makeRequest("https://sharehtml.zhenjia.dev/api/shares/ABCDE12345/access", {
+    method: "POST",
+    body: JSON.stringify({ accessKey }),
+    headers: { "content-type": "application/json" },
+  });
+
+  const res = await accessShare("ABCDE12345", request, env, ctx);
+
+  assert.equal(res.status, 200);
+  const setCookies = (res.headers as Headers & { getSetCookie(): string[] }).getSetCookie();
+  assert.equal(setCookies.length, 2);
+  const cookie = res.headers.get("set-cookie") ?? "";
+  assert.ok(cookie.startsWith(`${previewGrantCookieName("ABCDE12345")}=`));
+  assert.ok(cookie.includes("Path=/v/ABCDE12345"));
+  assert.ok(cookie.includes(`${metadataGrantCookieName("ABCDE12345")}=`));
+  assert.ok(cookie.includes("Path=/api/shares/ABCDE12345/access"));
+  assert.ok(cookie.includes("HttpOnly"));
+  assert.ok(cookie.includes("Secure"));
+  const body = await res.json() as { share: Record<string, unknown> };
+  assert.equal(body.share.visibility, "private_link");
+  assert.ok(!("owner_user_id" in body.share));
+  assert.equal(ctx.waitUntil.mock.calls.length, 1);
+});
+
+test("accessShare: a valid metadata grant restores a private page without resending the key", async () => {
+  const env = makeEnv();
+  const shareRow = makeShareRow({
+    visibility: "private_link",
+    access_key_hash: await hashShareAccessKey("A".repeat(43), env),
+    access_key_version: 1,
+  });
+  const grant = await createMetadataGrant(shareRow as never, env);
+  vi.stubGlobal("fetch", async () => supabaseOk([shareRow]));
+  const request = makeRequest(
+    "https://sharehtml.zhenjia.dev/api/shares/ABCDE12345/access",
+    { method: "POST", body: "{}", headers: { "content-type": "application/json" } },
+    { cookie: `${metadataGrantCookieName("ABCDE12345")}=${grant}` }
+  );
+
+  const res = await accessShare("ABCDE12345", request, env, makeCtx());
+
+  assert.equal(res.status, 200);
+  const body = await res.json() as { share: Record<string, unknown> };
+  assert.equal(body.share.visibility, "private_link");
+  assert.ok((res.headers.get("set-cookie") ?? "").includes(previewGrantCookieName("ABCDE12345")));
+});
+
+test("accessShare: missing credentials and metadata grant stays access-required", async () => {
+  const env = makeEnv();
+  const shareRow = makeShareRow({
+    visibility: "private_link",
+    access_key_hash: await hashShareAccessKey("A".repeat(43), env),
+    access_key_version: 1,
+  });
+  vi.stubGlobal("fetch", async () => supabaseOk([shareRow]));
+  const request = makeRequest("https://sharehtml.zhenjia.dev/api/shares/ABCDE12345/access", {
+    method: "POST",
+    body: "{}",
+    headers: { "content-type": "application/json" },
+  });
+
+  const res = await accessShare("ABCDE12345", request, env, makeCtx());
+
+  assert.equal(res.status, 401);
+  assert.deepEqual(await res.json(), {
+    error: "Access key required.",
+    code: "share_access_required",
+  });
+  assert.equal(res.headers.get("set-cookie"), null);
+});
+
+test("rotateShareAccessKey: updates only the signed-in owner's private share", async () => {
+  let patchUrl = "";
+  let patchBody: Record<string, unknown> | undefined;
+  const env = makeEnv();
+  vi.stubGlobal("fetch", vi.fn(async (url: unknown, init?: RequestInit) => {
+    const requestUrl = String(url);
+    const method = init?.method ?? "GET";
+    if (requestUrl.endsWith("/auth/v1/user")) {
+      return new Response(JSON.stringify({ id: "owner-1", email: "owner@example.com" }), {
+        headers: { "content-type": "application/json" },
+      });
+    }
+    if (method === "GET" && requestUrl.includes("/profiles?")) {
+      return supabaseOk([{ id: "owner-1", role: "user", banned_at: null }]);
+    }
+    if (method === "PATCH" && requestUrl.includes("/shares?")) {
+      patchUrl = requestUrl;
+      patchBody = JSON.parse(init?.body as string) as Record<string, unknown>;
+      return supabaseOk([makeShareRow({
+        owner_user_id: "owner-1",
+        visibility: "private_link",
+        access_key_hash: patchBody.access_key_hash,
+        access_key_version: patchBody.access_key_version,
+      })]);
+    }
+    if (method === "POST" && requestUrl.includes("/share_events")) return supabaseOk([{}]);
+    throw new Error(`Unexpected fetch: ${method} ${requestUrl}`);
+  }));
+  const request = makeRequest(
+    "https://sharehtml.zhenjia.dev/api/shares/share-id-1/access-key",
+    { method: "POST" },
+    { authorization: "Bearer owner-jwt" }
+  );
+
+  const res = await rotateShareAccessKey("share-id-1", request, env, makeCtx());
+
+  assert.equal(res.status, 200);
+  assert.ok(patchUrl.includes("id=eq.share-id-1"));
+  assert.ok(patchUrl.includes("owner_user_id=eq.owner-1"));
+  assert.ok(patchUrl.includes("visibility=eq.private_link"));
+  const body = await res.json() as { accessKey: string; share: Record<string, unknown> };
+  assert.match(body.accessKey, /^[A-Za-z0-9_-]{43}$/);
+  assert.equal(patchBody?.access_key_hash, await hashShareAccessKey(body.accessKey, env));
+  assert.equal(body.share.share_url, `https://sharehtml.zhenjia.dev/s/ABCDE12345#key=${body.accessKey}`);
+  assert.ok(!("access_key_hash" in body.share));
 });
 
 // ---------------------------------------------------------------------------
@@ -1128,6 +1392,66 @@ test("previewShare: returns HTML response for active share", async () => {
   assert.equal(res.status, 200);
   const ct = res.headers.get("content-type") ?? "";
   assert.ok(ct.includes("text/html"), `expected text/html, got ${ct}`);
+  assert.equal(res.headers.get("cache-control"), "private, no-store");
+  assert.equal(res.headers.get("x-robots-tag"), "noindex, nofollow, noarchive, nosnippet, noimageindex");
+  assert.equal(res.headers.get("content-signal"), "search=no, ai-input=no, ai-train=no, use=immediate");
+});
+
+test("previewShare: private content is never read from R2 without a valid grant", async () => {
+  const env = makeEnv();
+  const shareRow = makeShareRow({
+    visibility: "private_link",
+    access_key_hash: await hashShareAccessKey("A".repeat(43), env),
+    access_key_version: 1,
+  });
+  vi.stubGlobal("fetch", async () => supabaseOk([shareRow]));
+  const getMock = vi.fn(async () => ({ body: new ReadableStream() }));
+  const privateEnv = makeEnv({
+    SHARE_HTML_BUCKET: { put: vi.fn(async () => {}), get: getMock },
+  });
+
+  const res = await previewShare(makePreviewRequest("ABCDE12345"), privateEnv, makeCtx());
+
+  assert.equal(res.status, 403);
+  assert.equal(getMock.mock.calls.length, 0);
+  assert.equal(res.headers.get("cache-control"), "no-store");
+  assert.equal(res.headers.get("x-robots-tag"), "noindex, nofollow, noarchive, nosnippet, noimageindex");
+  assert.ok((await res.text()).includes("Access key required"));
+});
+
+test("previewShare: a valid grant unlocks only the intended private preview", async () => {
+  const env = makeEnv();
+  const shareRow = makeShareRow({
+    visibility: "private_link",
+    access_key_hash: await hashShareAccessKey("A".repeat(43), env),
+    access_key_version: 1,
+  });
+  const grant = await createPreviewGrant(shareRow as never, env);
+  vi.stubGlobal("fetch", async () => supabaseOk([shareRow]));
+  const htmlContent = "<!doctype html><p>private</p>";
+  const getMock = vi.fn(async () => ({
+    body: new ReadableStream({
+      start(controller) {
+        controller.enqueue(new TextEncoder().encode(htmlContent));
+        controller.close();
+      },
+    }),
+    httpMetadata: { contentType: "text/html; charset=utf-8" },
+  }));
+  const privateEnv = makeEnv({
+    SHARE_HTML_BUCKET: { put: vi.fn(async () => {}), get: getMock },
+  });
+  const request = makeRequest(
+    "https://sharehtml.zhenjia.dev/v/ABCDE12345/",
+    {},
+    { cookie: `${previewGrantCookieName("ABCDE12345")}=${grant}` }
+  );
+
+  const res = await previewShare(request, privateEnv, makeCtx());
+
+  assert.equal(res.status, 200);
+  assert.equal(await res.text(), htmlContent);
+  assert.equal(getMock.mock.calls.length, 1);
 });
 
 test("previewShare: returns HTML error page (404) for unknown slug", async () => {
@@ -1214,4 +1538,6 @@ test("previewShare: sets content-security-policy sandbox headers", async () => {
   assert.equal(res.status, 200);
   const csp = res.headers.get("content-security-policy") ?? "";
   assert.ok(csp.includes("default-src"), "CSP header should be present on preview response");
+  assert.ok(csp.includes("sandbox allow-scripts allow-forms allow-popups allow-downloads"));
+  assert.ok(!csp.includes("allow-same-origin"), "uploaded HTML must always have an opaque origin");
 });
