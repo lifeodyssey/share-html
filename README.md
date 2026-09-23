@@ -1,5 +1,9 @@
 # Share HTML
 
+Usage research is available at [`/report/0923`](https://sharehtml.zhenjia.dev/report/0923). The September 23, 2026 report uses a frozen snapshot and publishes only aggregated findings and anonymized use cases.
+
+First-party analytics separates browser reports, HTTP/MCP business outcomes, acquisition signals, and bot evidence. See the [measurement contract](docs/analytics/measurement-contract.md) and [operations guide](docs/analytics/operations.md) for consent, data limits, retention, and GA4 configuration. Apply the analytics migrations before deploying with `ANALYTICS_ENABLED=true`. Consenting browser events use the separate Share HTML GA4 property; enhanced measurement is disabled and private share pages do not send Google events.
+
 <p align="center">
   <a href="https://sharehtml.zhenjia.dev">
     <img src="./public/logo.svg" alt="Share HTML logo" width="112" height="112">

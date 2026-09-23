@@ -1,3 +1,4 @@
+import { trackEvent, parseUploadAnalytics, type Acquisition } from "./analytics.ts";
 import type { PublicShare, ShareRecord, ShareVisibility } from "../shared/types.ts";
 import {
   cleanTitle,
@@ -59,6 +60,7 @@ import { json, readJson, withDiscoveryHeaders } from "./http.ts";
 import { USER_CONTENT_SIGNAL } from "./constants.ts";
 
 type Env = {
+  ANALYTICS_ENABLED?: string;
   ASSETS: Fetcher;
   AUTH_EMAIL?: SendEmail;
   SHARE_HTML_BUCKET: R2Bucket;
@@ -86,6 +88,18 @@ const NO_INDEX = "noindex, nofollow, noarchive, nosnippet, noimageindex";
 const GROWTH_SOURCE_PATTERN = /^[a-z0-9_-]{1,64}$/;
 
 export async function createShare(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
+  const attribution: { session_id?: string; acquisition?: Acquisition; legacy_source?: string } = {};
+  try {
+    const response = await createShareFromForm(request, env, ctx, attribution);
+    trackEvent(request, env, ctx, { event_name: response.status < 400 ? "share_created" : "share_create_failed", transport: "http_api", status: response.status, outcome: response.status === 202 ? "blocked" : response.status < 400 ? "success" : "failure", ...attribution });
+    return response;
+  } catch (error) {
+    trackEvent(request, env, ctx, { event_name: "share_create_failed", transport: "http_api", status: 500, outcome: "failure", ...attribution });
+    throw error;
+  }
+}
+
+async function createShareFromForm(request: Request, env: Env, ctx: ExecutionContext, attribution: { session_id?: string; acquisition?: Acquisition; legacy_source?: string }): Promise<Response> {
   requireWorkerDatabaseAccess(env);
 
   const user = await getOptionalUser(request, env);
@@ -94,6 +108,11 @@ export async function createShare(request: Request, env: Env, ctx: ExecutionCont
   }
 
   const form = await request.formData();
+  const rawSource = typeof form.get("source") === "string" ? (form.get("source") as string) : "";
+  const source = GROWTH_SOURCE_PATTERN.test(rawSource) ? rawSource : "api";
+  attribution.legacy_source = source;
+
+  Object.assign(attribution, parseUploadAnalytics(form.get("analytics")));
   const file = form.get("file");
   if (!isUploadFile(file)) {
     return json({ error: "Upload a single HTML file." }, 422);
@@ -106,8 +125,6 @@ export async function createShare(request: Request, env: Env, ctx: ExecutionCont
 
   const html = await file.text();
   const title = typeof form.get("title") === "string" ? (form.get("title") as string) : "";
-  const rawSource = typeof form.get("source") === "string" ? (form.get("source") as string) : "";
-  const source = GROWTH_SOURCE_PATTERN.test(rawSource) ? rawSource : "api";
   const visibilityValue = form.get("visibility");
   const visibility = visibilityValue === null || visibilityValue === "public_unlisted"
     ? "public_unlisted"
@@ -467,6 +484,7 @@ export async function previewShare(request: Request, env: Env, ctx: ExecutionCon
   if (!object?.body) return previewMessage("The uploaded HTML object is missing.", 404, request, env);
 
   if (request.method === "GET") {
+    trackEvent(request, env, ctx, { event_name: "preview_served", transport: "http_api", status: 200, outcome: "success" });
     ctx.waitUntil(logShareEvent(env, share.id, null, "viewed", null, null, {}).catch(logBackgroundError));
   }
 

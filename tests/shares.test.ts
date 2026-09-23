@@ -1541,3 +1541,45 @@ test("previewShare: sets content-security-policy sandbox headers", async () => {
   assert.ok(csp.includes("sandbox allow-scripts allow-forms allow-popups allow-downloads"));
   assert.ok(!csp.includes("allow-same-origin"), "uploaded HTML must always have an opaque origin");
 });
+
+test("createShare analytics records server success with untrusted source separate from transport", async () => {
+  const writes: Record<string, unknown>[] = [];
+  const ordinaryFetch = makeCreateShareFetch(makeShareRow());
+  vi.stubGlobal("fetch", async (url: unknown, init: RequestInit) => {
+    if (String(url).includes("/rpc/record_analytics_event")) {
+      writes.push(JSON.parse(String(init.body)).payload);
+      return supabaseOk(true);
+    }
+    return ordinaryFetch(url, init);
+  });
+  const jobs: Promise<unknown>[] = [];
+  const ctx = { waitUntil: (job: Promise<unknown>) => jobs.push(job) } as ExecutionContext;
+  const form = new FormData();
+  form.set("file", new Blob([MINIMAL_HTML], { type: "text/html" }), "private-title.html");
+  form.set("source", "mcp");
+  form.set("analytics", JSON.stringify({ session_id: "bab11f0d-0baa-417b-8271-620fa97ef198", acquisition: { source: "google", campaign: "safe" } }));
+  const response = await createShare(makeRequest(undefined, { method: "POST", body: form }), makeEnv({ ANALYTICS_ENABLED: "true" }), ctx);
+  await Promise.all(jobs);
+  assert.equal(response.status, 201);
+  assert.equal(writes[0].event_name, "share_created");
+  assert.equal(writes[0].transport, "http_api");
+  assert.equal(writes[0].legacy_source, "mcp");
+  assert.equal(writes[0].session_id, "bab11f0d-0baa-417b-8271-620fa97ef198");
+  assert.ok(!JSON.stringify(writes).includes("private-title"));
+});
+
+test("createShare analytics records validation rejection and thrown failures without changing responses", async () => {
+  const writes: Record<string, unknown>[] = [];
+  vi.stubGlobal("fetch", async (_url: unknown, init: RequestInit) => {
+    writes.push(JSON.parse(String(init.body)).payload);
+    return supabaseOk(true);
+  });
+  const jobs: Promise<unknown>[] = [];
+  const ctx = { waitUntil: (job: Promise<unknown>) => jobs.push(job) } as ExecutionContext;
+  const env = makeEnv({ ANALYTICS_ENABLED: "true" });
+  const response = await createShare(makeRequest(undefined, { method: "POST", body: new FormData() }), env, ctx);
+  assert.equal(response.status, 422);
+  await assert.rejects(() => createShare(makeRequest(undefined, { method: "POST", body: "bad" }), env, ctx));
+  await Promise.all(jobs);
+  assert.deepEqual(writes.map(row => [row.event_name, row.status]), [["share_create_failed", 422], ["share_create_failed", 500]]);
+});

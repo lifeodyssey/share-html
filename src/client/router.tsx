@@ -23,6 +23,7 @@ import {
 } from "@tanstack/react-router";
 
 import { Header } from "./session";
+import { AnalyticsNotice } from "./AnalyticsNotice";
 
 // Lazy imports from main.tsx are NOT done here to avoid circular deps.
 // Instead, the route components are defined in main.tsx and passed in via
@@ -39,6 +40,7 @@ const rootRoute = createRootRoute({
     <main className="app-shell">
       <Header />
       <Outlet />
+      <AnalyticsNotice />
     </main>
   ),
 });

@@ -418,3 +418,8 @@ button {
     animation: none;
   }
 }
+/* The choice stays below the product flow and never blocks an upload. */
+.analytics-notice { margin-top: 2rem; padding: 1rem 0; border-top: 1px solid var(--color-border); display: flex; align-items: center; justify-content: space-between; gap: 1rem; font-size: .82rem; }
+.analytics-notice p { max-width: 64ch; margin: .35rem 0; line-height: 1.6; color: var(--color-muted); }
+.analytics-notice-actions { display: flex; gap: .5rem; flex-shrink: 0; }
+@media (max-width: 640px) { .analytics-notice { align-items: flex-start; flex-direction: column; } }
