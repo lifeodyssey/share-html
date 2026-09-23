@@ -34,6 +34,9 @@
     }
   ],
   "vars": {
+    "ANALYTICS_ENABLED": "true",
+    "GA4_AUTOMATIC_EVENTS_DISABLED": "true",
+    "GA4_MEASUREMENT_ID": "G-8B4LL2C8L7",
     "SUPABASE_URL": "https://hihvtuyweqxnsmqmegdt.supabase.co",
     "SUPABASE_PUBLISHABLE_KEY": "sb_publishable_O2svPHByfqE4UPnQPMrPRA_eowyAuET",
     "APP_ORIGIN": "https://sharehtml.zhenjia.dev",

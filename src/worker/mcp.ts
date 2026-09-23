@@ -1,3 +1,4 @@
+import { trackEvent, record } from "./analytics.ts";
 import { LLMS_TXT } from "./constants.ts";
 import { getShareBySlug, toPublicShare } from "./db.ts";
 import { withDiscoveryHeaders } from "./http.ts";
@@ -5,6 +6,7 @@ import { createShareRecord } from "./shares.ts";
 import { errorMessage } from "./utils.ts";
 
 type Env = {
+  ANALYTICS_ENABLED?: string;
   ASSETS: Fetcher;
   AUTH_EMAIL?: SendEmail;
   SHARE_HTML_BUCKET: R2Bucket;
@@ -82,6 +84,16 @@ export async function handleMcpRequest(request: Request, env: Env, ctx: Executio
   }
 
   const response = await handleMcpMessage(payload, request, env, ctx);
+  if (isJsonRpcRequest(payload) && "id" in payload) {
+    const method = ["initialize", "tools/list", "tools/call"].includes(payload.method) ? payload.method : "other";
+    const params = record(payload.params);
+    const tool = ["create_share", "get_public_share", "describe_share_html"].includes(String(params.name)) ? String(params.name) : "other";
+    const clientName = record(params.clientInfo).name;
+    const client = typeof clientName === "string" ? (/claude/i.test(clientName) ? "claude" : /codex/i.test(clientName) ? "codex" : /cursor/i.test(clientName) ? "cursor" : /chatgpt/i.test(clientName) ? "chatgpt" : "other") : "unknown";
+    const failed = Boolean(response?.error || record(response?.result).isError);
+    trackEvent(request, env, ctx, { event_name: method === "initialize" ? "mcp_initialize" : "mcp_request", transport: "mcp", mcp_method: method, mcp_tool: method === "tools/call" ? tool : undefined, mcp_client: method === "initialize" ? client : "unknown", outcome: failed ? "failure" : "success" });
+    if (method === "tools/call" && tool === "create_share" && failed) trackEvent(request, env, ctx, { event_name: "share_create_failed", transport: "mcp", outcome: "failure", legacy_source: "mcp" });
+  }
   if (response === null) {
     return withDiscoveryHeaders(new Response(null, { status: 202 }));
   }
@@ -242,6 +254,7 @@ export async function handleMcpToolCall(
       visibility,
       source: "mcp",
     });
+    if (result.status < 400) trackEvent(request, env, ctx, { event_name: "share_created", transport: "mcp", status: result.status, outcome: result.status === 202 ? "blocked" : "success", legacy_source: "mcp" });
     return mcpResult(id, {
       isError: result.status >= 400,
       content: [{ type: "text", text: JSON.stringify(result.body, null, 2) }]

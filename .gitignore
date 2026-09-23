@@ -10,3 +10,5 @@ dist/
 *.local
 worker-configuration.d.ts
 supabase/.temp/
+__pycache__/
+*.pyc

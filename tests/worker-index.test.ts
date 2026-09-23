@@ -233,3 +233,90 @@ test("worker fetch: unknown browser route is a real noindex 404", async () => {
   assert.ok(html.includes("<h1>Not found</h1>"));
   assert.ok(!html.includes("Share HTML — upload one HTML file"));
 });
+
+test("worker report aliases redirect once and canonical folder goes unchanged to ASSETS", async () => {
+  const env = makeEnv();
+  env.ASSETS.fetch = vi.fn(async (request: Request) => {
+    if (new URL(request.url).pathname.endsWith("index.html")) {
+      return new Response(null, { status: 307, headers: { location: "/report/0923/" } });
+    }
+    return new Response("<!doctype html><title>Report</title>", { headers: { "content-type": "text/html" } });
+  });
+  for (const path of ["/report", "/report/0923", "/report/0923/index.html"]) {
+    const response = await worker.fetch(new Request("https://sharehtml.zhenjia.dev" + path), env, makeCtx());
+    assert.equal(response.status, 302);
+    assert.equal(response.headers.get("location"), "/report/0923/");
+  }
+  const english = await worker.fetch(new Request("https://sharehtml.zhenjia.dev/report?lang=en"), env, makeCtx());
+  assert.equal(english.headers.get("location"), "/report/0923/?lang=en");
+  assert.equal(env.ASSETS.fetch.mock.calls.length, 0);
+  const request = new Request("https://sharehtml.zhenjia.dev/report/0923/");
+  const response = await worker.fetch(request, env, makeCtx());
+  assert.equal(response.status, 200);
+  assert.equal(env.ASSETS.fetch.mock.calls[0][0], request);
+  assert.equal(response.headers.get("x-robots-tag"), "noindex, nofollow");
+  assert.equal(response.headers.get("link"), '<https://sharehtml.zhenjia.dev/report/0923/>; rel="canonical"');
+});
+
+test("worker report serves aggregate JSON but rejects missing-asset SPA HTML fallback", async () => {
+  const env = makeEnv();
+  env.ASSETS.fetch = vi.fn(async (request: Request) => new URL(request.url).pathname.endsWith("data.json")
+    ? new Response('{"count":2}', { headers: { "content-type": "application/json" } })
+    : new Response(INDEX_HTML, { headers: { "content-type": "text/html" } }));
+  const json = await worker.fetch(new Request("https://sharehtml.zhenjia.dev/report/0923/data.json"), env, makeCtx());
+  assert.equal(json.status, 200);
+  assert.deepEqual(await json.json(), { count: 2 });
+  const missing = await worker.fetch(new Request("https://sharehtml.zhenjia.dev/report/0923/missing.csv"), env, makeCtx());
+  assert.equal(missing.status, 404);
+});
+
+test.each(["/", "/agents", "/s/private-slug"])("page_served records successful HTML GET %s with independent UA evidence", async (path) => {
+  const events: Record<string, unknown>[] = [];
+  vi.stubGlobal("fetch", vi.fn(async (url: unknown, init?: RequestInit) => {
+    if (String(url).includes("/rpc/record_analytics_event")) {
+      events.push(JSON.parse(String(init?.body)).payload);
+      return new Response("true", { headers: { "content-type": "application/json" } });
+    }
+    return new Response(JSON.stringify([{ id: "private-id", slug: "private-slug", visibility: "private_link", lifecycle_status: "active", deleted_at: null }]), { headers: { "content-type": "application/json" } });
+  }));
+  const env = { ...makeEnv(), ANALYTICS_ENABLED: "true" };
+  const jobs: Promise<unknown>[] = [];
+  const ctx = { waitUntil: (job: Promise<unknown>) => jobs.push(job) } as ExecutionContext;
+  const response = await worker.fetch(new Request("https://sharehtml.zhenjia.dev" + path, { headers: { "user-agent": "OAI-SearchBot" } }), env, ctx);
+  await Promise.all(jobs);
+  assert.equal(response.status, 200);
+  assert.equal(events.length, 1);
+  assert.equal(events[0].event_name, "page_served");
+  assert.equal(events[0].route, path.startsWith("/s/") ? "/s/:slug" : path);
+  assert.equal(events[0].actor_category, "ai_search");
+  assert.equal(events[0].actor_evidence, "ua_self_reported");
+  assert.equal(events[0].transport, "http_api");
+  assert.equal(events[0].status, 200);
+  assert.equal(events[0].outcome, "success");
+  assert.equal(events[0].session_id, null);
+  assert.ok(!JSON.stringify(events).includes("private-slug"));
+});
+
+test("page_served excludes HEAD, errors, unknown routes and Markdown discovery", async () => {
+  const events: Record<string, unknown>[] = [];
+  vi.stubGlobal("fetch", vi.fn(async (url: unknown, init?: RequestInit) => {
+    if (String(url).includes("/rpc/record_analytics_event")) {
+      events.push(JSON.parse(String(init?.body)).payload);
+      return new Response("true", { headers: { "content-type": "application/json" } });
+    }
+    return new Response("[]", { headers: { "content-type": "application/json" } });
+  }));
+  const env = { ...makeEnv(), ANALYTICS_ENABLED: "true" };
+  const jobs: Promise<unknown>[] = [];
+  const ctx = { waitUntil: (job: Promise<unknown>) => jobs.push(job) } as ExecutionContext;
+  for (const path of ["/", "/agents", "/s/missing"]) await worker.fetch(new Request("https://sharehtml.zhenjia.dev" + path, { method: "HEAD" }), env, ctx);
+  for (const path of ["/s/missing", "/not-a-page"]) {
+    const response = await worker.fetch(new Request("https://sharehtml.zhenjia.dev" + path), env, ctx);
+    assert.equal(response.status, 404);
+  }
+  env.ASSETS.fetch = vi.fn(async () => new Response("<html>error</html>", { status: 500, headers: { "content-type": "text/html" } }));
+  assert.equal((await worker.fetch(new Request("https://sharehtml.zhenjia.dev/"), env, ctx)).status, 500);
+  await worker.fetch(new Request("https://sharehtml.zhenjia.dev/", { headers: { accept: "text/markdown" } }), env, ctx);
+  await Promise.all(jobs);
+  assert.deepEqual(events.map(event => event.event_name), ["discovery_read"]);
+});

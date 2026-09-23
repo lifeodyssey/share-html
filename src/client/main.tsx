@@ -54,6 +54,7 @@ import { SessionContext, useSession } from "./session";
 import { router } from "./router";
 import "./theme.css";
 import "./styles.css";
+import { trackBrowserEvent } from "./analytics";
 
 const PUBLIC_SITE_ORIGIN = "https://sharehtml.zhenjia.dev";
 const HOME_TITLE = "Share HTML — Upload and Share Sandboxed HTML Previews";
@@ -1174,6 +1175,7 @@ function CopyLine({
   const [copied, setCopied] = useState(false);
   const copy = async () => {
     await navigator.clipboard.writeText(value);
+    if (href) trackBrowserEvent("share_link_copied");
     setCopied(true);
     setTimeout(() => setCopied(false), 1200);
   };

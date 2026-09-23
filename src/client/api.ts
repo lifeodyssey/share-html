@@ -1,4 +1,5 @@
 import type { PublicShare, ShareVisibility } from "../shared/types";
+import { trackBrowserEvent, trackBrowserUploadSuccess, uploadAnalyticsContext } from "./analytics";
 
 // ---------------------------------------------------------------------------
 // Shared types
@@ -7,6 +8,8 @@ import type { PublicShare, ShareVisibility } from "../shared/types";
 export type AppConfig = {
   supabaseUrl: string;
   supabasePublishableKey: string;
+  analyticsEnabled?: boolean;
+  ga4MeasurementId?: string;
 };
 
 export type UploadResult = {
@@ -101,12 +104,23 @@ export async function uploadShare(
   body.set("visibility", visibility);
   if (source) body.set("source", source);
 
-  const response = await fetch("/api/shares", {
-    method: "POST",
-    headers: accessToken ? { authorization: `Bearer ${accessToken}` } : undefined,
-    body
-  });
-  return expectOk<UploadResult>(response, "Upload failed");
+  const analytics = uploadAnalyticsContext();
+  if (analytics) body.set("analytics", JSON.stringify(analytics));
+  if (analytics) trackBrowserEvent("upload_started");
+
+  try {
+    const response = await fetch("/api/shares", {
+      method: "POST",
+      headers: accessToken ? { authorization: `Bearer ${accessToken}` } : undefined,
+      body
+    });
+    const result = await expectOk<UploadResult>(response, "Upload failed");
+    if (analytics && result.share.lifecycle_status === "active") trackBrowserUploadSuccess();
+    return result;
+  } catch (error) {
+    if (analytics) trackBrowserEvent("upload_failed");
+    throw error;
+  }
 }
 
 /**

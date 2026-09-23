@@ -1,3 +1,4 @@
+import { ingestBrowserEvent, trackEvent } from "./analytics.ts";
 import {
   errorMessage,
   escapeHtml,
@@ -59,6 +60,9 @@ import { getShareBySlug } from "./db.ts";
 import { handleA2aRequest } from "./a2a.ts";
 
 type Env = {
+  ANALYTICS_ENABLED?: string;
+  GA4_MEASUREMENT_ID?: string;
+  GA4_AUTOMATIC_EVENTS_DISABLED?: string;
   ASSETS: Fetcher;
   AUTH_EMAIL?: SendEmail;
   SHARE_HTML_BUCKET: R2Bucket;
@@ -82,9 +86,26 @@ type Env = {
 export default {
   async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
     const url = new URL(request.url);
+    if (url.pathname === "/api/analytics/events") return ingestBrowserEvent(request, env);
+    if (url.pathname === "/report" || url.pathname === "/report/" || url.pathname === "/report/0923" || url.pathname === "/report/0923/index.html") {
+      if (request.method !== "GET" && request.method !== "HEAD") return methodNotAllowed("GET, HEAD");
+      const language = url.searchParams.get("lang");
+      const location = "/report/0923/" + (language === "en" || language === "zh" ? `?lang=${language}` : "");
+      return new Response(null, { status: 302, headers: { location, "x-robots-tag": "noindex, nofollow" } });
+    }
+    if (url.pathname.startsWith("/report/0923/")) {
+      if (request.method !== "GET" && request.method !== "HEAD") return methodNotAllowed("GET, HEAD");
+      const asset = await env.ASSETS.fetch(request);
+      if (url.pathname !== "/report/0923/" && (asset.headers.get("content-type") ?? "").includes("text/html")) return notFoundHtml(request.method);
+      const headers = new Headers(asset.headers);
+      headers.set("x-robots-tag", "noindex, nofollow");
+      headers.set("link", `<${url.origin}/report/0923/>; rel="canonical"`);
+      return new Response(request.method === "HEAD" ? null : asset.body, { status: asset.status, headers });
+    }
     const discoveryResponse = discoveryRoute(request, url, env);
 
     if (discoveryResponse) {
+      if (request.method === "GET" && discoveryResponse.status < 400) trackEvent(request, env, ctx, { event_name: "discovery_read", transport: "http_api", status: discoveryResponse.status });
       return withDiscoveryHeaders(discoveryResponse);
     }
 
@@ -97,13 +118,14 @@ export default {
     }
 
     if (url.pathname === "/" && acceptsMarkdown(request)) {
+      if (request.method === "GET") trackEvent(request, env, ctx, { event_name: "discovery_read", transport: "http_api", status: 200 });
       return varyAccept(withDiscoveryHeaders(textResponse(LLMS_TXT, "text/markdown; charset=utf-8", request.method)));
     }
 
     const marketingPage = marketingPageForPath(url.pathname);
     if (marketingPage) {
       if (request.method !== "GET" && request.method !== "HEAD") return methodNotAllowed("GET, HEAD");
-      return await serveMarketingRoute(request, env, marketingPage);
+      return trackPageServed(await serveMarketingRoute(request, env, marketingPage), request, env, ctx);
     }
 
     if (request.method === "OPTIONS" && url.pathname.startsWith("/api/")) {
@@ -114,7 +136,9 @@ export default {
       if (url.pathname === "/api/config" && request.method === "GET") {
         return json({
           supabaseUrl: env.SUPABASE_URL,
-          supabasePublishableKey: env.SUPABASE_PUBLISHABLE_KEY
+          supabasePublishableKey: env.SUPABASE_PUBLISHABLE_KEY,
+          analyticsEnabled: env.ANALYTICS_ENABLED === "true",
+          ga4MeasurementId: env.GA4_AUTOMATIC_EVENTS_DISABLED === "true" && /^G-[A-Z0-9]{4,20}$/.test(env.GA4_MEASUREMENT_ID ?? "") ? env.GA4_MEASUREMENT_ID : undefined
         });
       }
 
@@ -181,7 +205,7 @@ export default {
 
       if (isShareRoute(url.pathname)) {
         if (request.method !== "GET" && request.method !== "HEAD") return methodNotAllowed("GET, HEAD");
-        return await serveShareRoute(request, env);
+        return trackPageServed(await serveShareRoute(request, env), request, env, ctx);
       }
 
       if (isExampleAssetRoute(url.pathname)) {
@@ -197,7 +221,7 @@ export default {
           return varyAccept(withDiscoveryHeaders(new Response(null, { headers: assetResponse.headers })));
         }
         if (request.method === "GET") {
-          return varyAccept(withDiscoveryHeaders(await injectConfig(assetResponse, env, request)));
+          return trackPageServed(varyAccept(withDiscoveryHeaders(await injectConfig(assetResponse, env, request))), request, env, ctx);
         }
       }
       return withDiscoveryHeaders(assetResponse);
@@ -207,6 +231,13 @@ export default {
     }
   }
 };
+
+function trackPageServed(response: Response, request: Request, env: Env, ctx: ExecutionContext): Response {
+  if (request.method === "GET" && response.ok) {
+    trackEvent(request, env, ctx, { event_name: "page_served", transport: "http_api", status: response.status, outcome: "success" });
+  }
+  return response;
+}
 
 /**
  * Injects the Supabase client config into an HTML response so the browser
@@ -221,7 +252,9 @@ async function injectConfig(
 ): Promise<Response> {
   const configScript = `<script>window.__APP_CONFIG__=${JSON.stringify({
     supabaseUrl: env.SUPABASE_URL,
-    supabasePublishableKey: env.SUPABASE_PUBLISHABLE_KEY
+    supabasePublishableKey: env.SUPABASE_PUBLISHABLE_KEY,
+          analyticsEnabled: env.ANALYTICS_ENABLED === "true",
+          ga4MeasurementId: env.GA4_AUTOMATIC_EVENTS_DISABLED === "true" && /^G-[A-Z0-9]{4,20}$/.test(env.GA4_MEASUREMENT_ID ?? "") ? env.GA4_MEASUREMENT_ID : undefined
   })}</script>`;
   const html = await response.text();
   const bodyAdjusted = routeFallbackHtml(html, request, options.fallback);

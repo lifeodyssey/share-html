@@ -1,0 +1,552 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex, nofollow">
+  <meta name="referrer" content="no-referrer">
+  <meta name="description" content="Share HTML 2026年第三季度产品使用研究：创建趋势、公开HTML用途与SEO、GEO、WebMCP证据边界。">
+  <title>Share HTML 使用研究 · 2026.09</title>
+  <link rel="stylesheet" href="/report/0923/report.css">
+  <script id="report-data" type="application/json">__REPORT_DATA__</script>
+  <script src="/report/0923/report.js" defer></script>
+</head>
+<body>
+  <header class="masthead">
+    <a class="wordmark" href="#top" aria-label="Share HTML research report">SHARE <b>HTML</b><span> / FIELD NOTES</span></a>
+    <nav aria-label="Report sections">
+      <a href="#q1"><span data-lang="zh">创建</span><span data-lang="en" hidden>Create</span></a>
+      <a href="#q3"><span data-lang="zh">用途</span><span data-lang="en" hidden>Purpose</span></a>
+      <a href="#q6"><span data-lang="zh">发现</span><span data-lang="en" hidden>Discovery</span></a>
+      <a href="#q7"><span data-lang="zh">证据</span><span data-lang="en" hidden>Evidence</span></a>
+      <a href="#method"><span data-lang="zh">方法</span><span data-lang="en" hidden>Method</span></a>
+    </nav>
+    <div class="language-switch" role="group" aria-label="Language">
+      <button type="button" data-language-choice="zh" aria-pressed="true">中文</button>
+      <button type="button" data-language-choice="en" aria-pressed="false">English</button>
+    </div>
+  </header>
+
+  <main id="top">
+    <section class="hero">
+      <div class="hero-copy">
+        <p class="eyebrow">
+          <span data-lang="zh">产品研究 · 2026 年第三季度</span>
+          <span data-lang="en" hidden>PRODUCT RESEARCH · Q3 2026</span>
+        </p>
+        <h1>
+          <span data-lang="zh">创建增量主要来自 API 标签，<br><em>高访问榜前五都与教育或课堂活动相关。</em></span>
+          <span data-lang="en" hidden>API labels lead creation growth.<br><em>The five most-requested artifacts relate to education or classroom activities.</em></span>
+        </h1>
+        <p class="dek">
+          <span data-lang="zh">这份快照有 2,797 条创建记录；应用日志另有 14,969 次带时间戳的内容访问请求；浏览器测量在 8 月至截点间估算 580 次页面加载。三种口径属于不同系统，不能相加成用户或转化漏斗。</span>
+          <span data-lang="en" hidden>The snapshot has 2,797 creation records. Application logs separately record 14,969 timestamped content-request events; browser measurement estimates 580 page loads from August to cutoff. These are different systems and cannot be added as people or a conversion funnel.</span>
+        </p>
+        <div class="hero-meta">
+          <span><b><span data-lang="zh">记录截点</span><span data-lang="en" hidden>Record cutoff</span></b> 2026-09-23 23:27 · Asia/Taipei</span>
+          <span><b><span data-lang="zh">边缘数据</span><span data-lang="en" hidden>Edge data</span></b> 2026-09-22 · UTC</span>
+          <span><b><span data-lang="zh">范围</span><span data-lang="en" hidden>Window</span></b> 2026-07-01 — 2026-09-23</span>
+        </div>
+      </div>
+      <aside class="hero-findings" aria-label="Key findings">
+        <p class="aside-label"><span data-lang="zh">三条可支持的结论</span><span data-lang="en" hidden>THREE SUPPORTED FINDINGS</span></p>
+        <div class="finding">
+          <span class="finding-number">01</span>
+          <p><strong><span data-lang="zh">API 标签贡献等长窗口增量的 86.2%</span><span data-lang="en" hidden>API label accounts for 86.2% of equal-window growth</span></strong><small><span data-lang="zh">8/1–23 到 9/1–23，净增 1,628 条中的 1,404 条</span><span data-lang="en" hidden>1,404 of the 1,628 net new records from Aug 1–23 to Sep 1–23</span></small></p>
+        </div>
+        <div class="finding">
+          <span class="finding-number">02</span>
+          <p><strong><span data-lang="zh">高访问榜前五占累计请求的 39.1%</span><span data-lang="en" hidden>The top five account for 39.1% of cumulative requests</span></strong><small><span data-lang="zh">人工检查均与教育或课堂活动相关；目的抽样，不代表全体</span><span data-lang="en" hidden>Manual review found all relate to education or classroom activities; purposive, not representative</span></small></p>
+        </div>
+        <div class="finding">
+          <span class="finding-number">03</span>
+          <p><strong><span data-lang="zh">MCP 成熟 7 日队列：5/201 有请求</span><span data-lang="en" hidden>Mature 7-day MCP cohort: 5/201 had requests</span></strong><small><span data-lang="zh">API 为 674/817；请求事件不等于独立读者</span><span data-lang="en" hidden>API: 674/817; request events are not unique readers</span></small></p>
+        </div>
+      </aside>
+    </section>
+
+    <div class="thesis">
+      <span class="thesis-mark">↳</span>
+      <p>
+        <span data-lang="zh">产品决策的关键不是把增长归因给某个发布日期，而是辨认：创建从哪些入口来、成品解决什么任务，以及哪些后续行为目前还没有被测量。</span>
+        <span data-lang="en" hidden>The product question is not which release caused growth. It is which creation paths are changing, what jobs the artifacts serve, and which follow-on behaviors remain unmeasured.</span>
+      </p>
+    </div>
+
+    <nav class="report-index" aria-label="Report contents">
+      <span class="report-index-label"><span data-lang="zh">七个问题 · 十余张图</span><span data-lang="en" hidden>7 questions · 10+ charts</span></span>
+      <a href="#q1"><span data-lang="zh">01 增长</span><span data-lang="en" hidden>01 Growth</span></a>
+      <a href="#q2"><span data-lang="zh">02 入口</span><span data-lang="en" hidden>02 Paths</span></a>
+      <a href="#q3"><span data-lang="zh">03 用途</span><span data-lang="en" hidden>03 Purpose</span></a>
+      <a href="#q4"><span data-lang="zh">04 重复与隐私</span><span data-lang="en" hidden>04 Repeats</span></a>
+      <a href="#q5"><span data-lang="zh">05 内容访问</span><span data-lang="en" hidden>05 Content requests</span></a>
+      <a href="#q6"><span data-lang="zh">06 来源与场景</span><span data-lang="en" hidden>06 Source &amp; use</span></a>
+      <a href="#q7"><span data-lang="zh">07 效果证据</span><span data-lang="en" hidden>07 Evidence</span></a>
+    </nav>
+
+    <section class="question-section" id="q1">
+      <header class="section-heading">
+        <span class="section-index">01</span>
+        <div>
+          <p class="section-kicker"><span data-lang="zh">增长时间</span><span data-lang="en" hidden>ACTIVITY OVER TIME</span></p>
+          <h2><span data-lang="zh">创建量从什么时候开始加速？</span><span data-lang="en" hidden>When did creation activity accelerate?</span></h2>
+        </div>
+        <p class="section-intro">
+          <span data-lang="zh">逐日创建记录显示九月的量级变化；七日均线帮助识别趋势，不消除快照截点造成的部分日偏差。</span>
+          <span data-lang="en" hidden>Daily creation records show the September step-up. The seven-day average helps reveal the trend but does not remove the partial-day cutoff.</span>
+        </p>
+      </header>
+      <figure class="figure-wide">
+        <div class="figure-heading">
+          <div>
+            <h3><span data-lang="zh">每日创建记录与七日均线</span><span data-lang="en" hidden>Daily creation records and seven-day average</span></h3>
+            <p><span data-lang="zh">横轴：日期（台北时间） · 纵轴：创建记录（条／日） · C1 为代码日期，M1/M2 为测量观察</span><span data-lang="en" hidden>X: date (Taipei time) · Y: creation records (per day) · C1 is a code date; M1/M2 are measurement observations</span></p>
+          </div>
+          <div class="legend" id="creation-legend"></div>
+        </div>
+        <div class="creation-event-strip">
+        <div class="event-strip-label"><span data-lang="zh">创建记录观察窗开始前</span><span data-lang="en" hidden>Before the creation-record window</span><small><span data-lang="zh">代码、构建与部署证据分开呈现</span><span data-lang="en" hidden>Code, build, and deployment evidence shown separately</span></small></div>
+          <div id="creation-before-events" class="creation-event-list"></div>
+        </div>
+        <div class="chart-scroll" id="creation-chart-wrap"><svg id="creation-chart" role="img"></svg></div>
+        <div id="creation-event-key" class="creation-event-key"></div>
+        <figcaption class="takeaway">
+          <strong><span data-lang="zh">读图</span><span data-lang="en" hidden>READOUT</span></strong>
+          <span data-lang="zh">九月截至 23 日有 2,038 条记录，是七月与八月合计 759 条的 2.69 倍；它说明记录增长，不说明人数增长。</span>
+          <span data-lang="en" hidden>Through September 23, the snapshot has 2,038 records—2.69× July and August combined (759). This is record growth, not evidence of user growth.</span>
+        </figcaption>
+        <div class="chart-data" id="creation-data"></div>
+      </figure>
+      <div class="support-grid support-two">
+        <figure class="figure">
+          <div class="figure-heading">
+            <div>
+              <h3><span data-lang="zh">等长窗口对比</span><span data-lang="en" hidden>Equal-length window comparison</span></h3>
+              <p><span data-lang="zh">单位：条记录 · 每月 1 日至 23 日</span><span data-lang="en" hidden>Unit: records · Days 1–23 of each month</span></p>
+            </div>
+          </div>
+          <div id="equal-window-chart" class="bar-chart" role="img"></div>
+          <figcaption class="figure-note"><span data-lang="zh">每月比较同为 23 个日历日；九月 23 日快照接近当日结束，但不是完整月份。</span><span data-lang="en" hidden>Each window covers 23 calendar days. The September cutoff is near the end of that day, not a complete month.</span></figcaption>
+          <div class="chart-data" id="equal-window-data"></div>
+        </figure>
+        <aside class="annotation">
+          <p class="annotation-label"><span data-lang="zh">分母提醒</span><span data-lang="en" hidden>DENOMINATOR</span></p>
+          <p><span data-lang="zh">七月 34 条；八月 725 条；九月截至 23 日 2,038 条。九月日均 88.6 条，八月日均 23.4 条。每一条都是分享记录，不是一个人。</span><span data-lang="en" hidden>July: 34 records; August: 725; September through the 23rd: 2,038. The daily average is 88.6 in September and 23.4 in August. Each is a share record, not a person.</span></p>
+          <p class="small-note"><span data-lang="zh">九月 23 日最后一个点是截至 23:27 的部分日。七日均线末值也包含该部分日。</span><span data-lang="en" hidden>The September 23 point is partial through 23:27; the final rolling average includes that partial day.</span></p>
+        </aside>
+      </div>
+    </section>
+
+    <section class="question-section" id="q2">
+      <header class="section-heading">
+        <span class="section-index">02</span>
+        <div>
+          <p class="section-kicker"><span data-lang="zh">创建入口</span><span data-lang="en" hidden>CREATION PATHS</span></p>
+          <h2><span data-lang="zh">增长来自哪些创建入口？</span><span data-lang="en" hidden>Which creation paths grew?</span></h2>
+        </div>
+        <p class="section-intro"><span data-lang="zh">记录来源是调用方提供的标签，适合看入口组合变化，不是获客来源或客户端身份。</span><span data-lang="en" hidden>Source is a caller-supplied label. It shows changes in the mix of creation paths, not acquisition source or client identity.</span></p>
+      </header>
+      <figure class="figure-wide">
+        <div class="figure-heading">
+          <div>
+            <h3><span data-lang="zh">每周创建量按来源拆分</span><span data-lang="en" hidden>Weekly creations by recorded source</span></h3>
+            <p><span data-lang="zh">横轴：周起始日期（台北时间） · 纵轴：创建记录（条／周）；末周为部分周</span><span data-lang="en" hidden>X: week start (Taipei time) · Y: creation records (per week); final week is partial</span></p>
+          </div>
+          <div class="legend" id="weekly-source-legend"></div>
+        </div>
+        <div class="chart-scroll"><svg id="weekly-source-chart" role="img"></svg></div>
+        <figcaption class="takeaway">
+          <strong><span data-lang="zh">读图</span><span data-lang="en" hidden>READOUT</span></strong>
+          <span data-lang="zh">八月创建以 MCP 标签为主；九月 API 标签快速增加。标签由调用方传入，不能据此确认最终用户或具体代理。</span>
+          <span data-lang="en" hidden>MCP-labeled records lead in August, while API-labeled records rise sharply in September. Caller-supplied labels cannot identify the end user or a specific agent.</span>
+        </figcaption>
+        <div class="chart-data" id="weekly-source-data"></div>
+      </figure>
+      <figure class="figure-wide figure-secondary">
+        <div class="figure-heading">
+          <div>
+            <h3><span data-lang="zh">月度来源占比</span><span data-lang="en" hidden>Monthly source composition</span></h3>
+            <p><span data-lang="zh">横轴：占当月创建记录比例（%） · 纵轴：月份 · 每行合计 100%</span><span data-lang="en" hidden>X: share of that month’s creation records (%) · Y: month · Each row totals 100%</span></p>
+          </div>
+        </div>
+        <div id="monthly-source-chart" class="stacked-months"></div>
+        <div class="legend" id="monthly-source-legend"></div>
+        <figcaption class="figure-note">
+          <span data-lang="zh">source 从 7 月 21 日才首次出现非空值。7 月 34 条中 29 条缺失来源；direct 是网页 UI 标签，不是 referrer。API 不等于人工，MCP 不等于 ChatGPT。</span>
+          <span data-lang="en" hidden>Non-empty source labels first appear on July 21. Twenty-nine of July’s 34 records have no source. “direct” marks the web UI path, not a referrer. API does not mean human; MCP does not mean ChatGPT.</span>
+        </figcaption>
+      </figure>
+    </section>
+
+    <section class="question-section" id="q3">
+      <header class="section-heading">
+        <span class="section-index">03</span>
+        <div>
+          <p class="section-kicker"><span data-lang="zh">作品任务</span><span data-lang="en" hidden>ARTIFACT PURPOSE</span></p>
+          <h2><span data-lang="zh">用户拿 HTML 做什么？</span><span data-lang="en" hidden>What are people making?</span></h2>
+        </div>
+        <p class="section-intro"><span data-lang="zh">从公开成品推断任务类型，不推断作者身份。2,453 个唯一公开文件全部读取，但规则只匹配 1,120 个；未分类不是“没有用途”。</span><span data-lang="en" hidden>Purpose is inferred from public artifacts, not creator identity. All 2,453 unique public files were retrieved, but rules matched 1,120. “Unclassified” does not mean “no purpose.”</span></p>
+      </header>
+      <figure class="figure-wide">
+        <div class="figure-heading">
+          <div>
+            <h3><span data-lang="zh">唯一 HTML 的推定用途</span><span data-lang="en" hidden>Inferred purpose of unique HTML artifacts</span></h3>
+            <p><span data-lang="zh">横轴：唯一公开 HTML 数量（个，从 0 起） · 纵轴：规则推定用途 · 分母 2,453</span><span data-lang="en" hidden>X: unique public HTML artifacts (count, zero-based) · Y: rule-inferred purpose · Denominator 2,453</span></p>
+          </div>
+          <div class="month-control">
+            <label for="purpose-period"><span data-lang="zh">创建月份</span><span data-lang="en" hidden>Creation month</span></label>
+            <select id="purpose-period" aria-label="Filter purposes by month">
+              <option value="all">全期 / All</option>
+              <option value="2026-07">七月 / July</option>
+              <option value="2026-08">八月 / August</option>
+              <option value="2026-09">九月 / September</option>
+            </select>
+          </div>
+        </div>
+        <div id="purpose-bars" class="purpose-bars"></div>
+        <figcaption class="takeaway">
+          <strong><span data-lang="zh">读图</span><span data-lang="en" hidden>READOUT</span></strong>
+          <span data-lang="zh">规则能识别的用途以报告、互动游戏、测试占位、教学练习和小工具为主；仍有 54.3% 未分类，不能据此推断市场份额。</span>
+          <span data-lang="en" hidden>Rules most often identify reports, interactive games, test placeholders, learning materials, and small tools; 54.3% remain unclassified, so this is not a market-share estimate.</span>
+        </figcaption>
+        <div class="chart-data" id="purpose-data"></div>
+      </figure>
+
+      <figure class="figure-wide sankey-figure">
+        <div class="figure-heading">
+          <div>
+            <p class="section-kicker"><span data-lang="zh">同一批记录的关联路径</span><span data-lang="en" hidden>LINKED PATTERNS IN THE SAME RECORDS</span></p>
+            <h3><span data-lang="zh">创建标签 → 推定用途 → 截点时是否有内容访问请求</span><span data-lang="en" hidden>Source label → inferred purpose → content requests recorded at cutoff</span></h3>
+            <p><span data-lang="zh">单位：状态标记为 active 的公开链接 · 同一 2,640 条记录；不是获客或转化漏斗</span><span data-lang="en" hidden>Unit: public links marked active · The same 2,640 records; not an acquisition or conversion funnel</span></p>
+          </div>
+        </div>
+        <div class="chart-scroll sankey-scroll"><svg id="source-purpose-sankey" role="img"></svg></div>
+        <figcaption class="takeaway">
+          <strong><span data-lang="zh">如何读</span><span data-lang="en" hidden>HOW TO READ</span></strong>
+          <span data-lang="zh">在可分类作品中，MCP 标签更多连到报告与测试，API 标签更多连到游戏与工具；这只是同一批记录的关联，不代表用户类型或转化。</span>
+          <span data-lang="en" hidden>Among identifiable artifacts, MCP labels link more often to reports and tests, while API labels link more often to games and tools; this is a pattern in the same records, not user types or conversion.</span>
+        </figcaption>
+        <p class="figure-note"><span data-lang="zh">横向表示关联阶段，带宽表示记录数；纵向只用于排布类别，没有数值轴。</span><span data-lang="en" hidden>Columns show relationship stages and band width shows record counts; vertical placement only arranges categories and has no numeric axis.</span></p>
+        <div class="chart-data" id="flow-data"></div>
+      </figure>
+
+      <div class="usecase-heading">
+        <p class="section-kicker"><span data-lang="zh">使用场景画像 · 来自作品，不是人口画像</span><span data-lang="en" hidden>USE-CASE ARCHETYPES · FROM ARTIFACTS, NOT POPULATION DEMOGRAPHICS</span></p>
+        <p><span data-lang="zh">2,453 个唯一公开 HTML 中识别出：报告研究 298 个、互动创作 261 个、学习教学 117 个、工具 99 个；这些是作品数量，不是用户数量，也不能推断职业或年龄。</span><span data-lang="en" hidden>Among 2,453 unique public HTML artifacts, rules identified 298 reports/research pieces, 261 interactive works, 117 learning artifacts, and 99 tools. These are artifact counts, not users, jobs, or ages.</span></p>
+      </div>
+      <div class="use-cases" id="use-cases" aria-label="Anonymized artifact examples"></div>
+      <details class="data-details">
+        <summary><span data-lang="zh">查看完整的用途 × 来源数据表</span><span data-lang="en" hidden>View the full purpose × source table</span></summary>
+        <div class="table-scroll"><table id="purpose-source-table"></table></div>
+        <p class="fineprint"><span data-lang="zh">只含 2,640 条状态标记为 active 的公开链接；按月份筛选时，同一个唯一 HTML 可以出现在不同月份。用途为规则推定。来源中，MCP 标签 1,015 条含报告研究 270、测试占位 248、未分类 323；API 标签 1,482 条含游戏 222、工具 92、教学 89、未分类 961。</span><span data-lang="en" hidden>Includes 2,640 public links marked active. One unique HTML may appear in multiple monthly filters. Purpose is rule-inferred. Of 1,015 MCP-labeled links, 270 map to reports/research, 248 to tests/placeholders, and 323 remain unclassified; of 1,482 API-labeled links, 222 map to games, 92 to tools, 89 to learning, and 961 remain unclassified.</span></p>
+      </details>
+    </section>
+
+    <section class="question-section" id="q4">
+      <header class="section-heading">
+        <span class="section-index">04</span>
+        <div>
+          <p class="section-kicker"><span data-lang="zh">重复与隐私</span><span data-lang="en" hidden>REPEATS AND PRIVACY</span></p>
+          <h2><span data-lang="zh">记录增长里，有多少是重复内容或私密分享？</span><span data-lang="en" hidden>How much involves repeated content or private links?</span></h2>
+        </div>
+        <p class="section-intro"><span data-lang="zh">重复上传会使链接数高于独立文件数；私密链接占比约二十分之一。两者都不能解释用户动机或留存。</span><span data-lang="en" hidden>Repeated uploads make link counts larger than unique files. Private links account for about one in twenty records. Neither reveals intent or retention.</span></p>
+      </header>
+      <div class="support-grid support-two">
+        <figure class="figure">
+          <div class="figure-heading">
+            <div>
+              <h3><span data-lang="zh">精确重复组的链接数分布</span><span data-lang="en" hidden>Share counts in exact-repeat groups</span></h3>
+              <p><span data-lang="zh">横轴：每组相同链接数（个） · 纵轴：精确重复组数（组） · 仅字节完全一致</span><span data-lang="en" hidden>X: identical links per group · Y: exact duplicate groups · Byte-identical content only</span></p>
+            </div>
+          </div>
+          <div class="chart-scroll"><svg id="repeat-groups-chart" role="img"></svg></div>
+          <figcaption class="figure-note"><span data-lang="zh">82 个重复 hash 组涵盖 275 条公开链接，比每个唯一文件留一条多出 193 条。标题相似组单独计算，不能证明内容相同。</span><span data-lang="en" hidden>82 repeated hash groups contain 275 public links, or 193 links beyond one per unique file. Similar-title groups are separate and do not prove identical content.</span></figcaption>
+          <div class="chart-data" id="repeat-data"></div>
+        </figure>
+        <figure class="figure">
+          <div class="figure-heading">
+            <div>
+              <h3><span data-lang="zh">每月私密链接占比</span><span data-lang="en" hidden>Private-link share by month</span></h3>
+              <p><span data-lang="zh">横轴：私密链接占比（%） · 纵轴：创建月份 · 分母为当月全部记录</span><span data-lang="en" hidden>X: private-link share (%) · Y: creation month · Denominator is all records that month</span></p>
+            </div>
+          </div>
+          <div id="privacy-month-chart" class="privacy-month-chart"></div>
+          <figcaption class="figure-note"><span data-lang="zh">七月 0/34；八月 30/725（4.1%）；九月截至 23 日 108/2,038（5.3%）。私密内容未被抓取。</span><span data-lang="en" hidden>July: 0/34; August: 30/725 (4.1%); September through the 23rd: 108/2,038 (5.3%). Private HTML was not fetched.</span></figcaption>
+        </figure>
+      </div>
+      <p class="concentration-note" id="repeat-concentration"></p>
+    </section>
+
+    <section class="question-section" id="q5">
+      <header class="section-heading">
+        <span class="section-index">05</span>
+        <div>
+          <p class="section-kicker"><span data-lang="zh">分享后的请求</span><span data-lang="en" hidden>AFTER SHARING</span></p>
+          <h2><span data-lang="zh">内容访问何时发生？之后还会再打开吗？</span><span data-lang="en" hidden>When do content requests happen, and do they recur?</span></h2>
+        </div>
+        <p class="section-intro"><span data-lang="zh">应用事件保留了请求时间。事件总和与每条分享在快照上的累计计数略有不同：时间窗内有 30 次请求来自 7 月前创建的链接。</span><span data-lang="en" hidden>Application events retain request timestamps. Their total differs slightly from per-share snapshot counters: 30 requests in the time window belong to links created before July.</span></p>
+      </header>
+      <figure class="figure-wide">
+        <div class="figure-heading">
+          <div>
+            <h3><span data-lang="zh">创建事件与内容访问请求事件逐日变化</span><span data-lang="en" hidden>Daily creation and content-request events</span></h3>
+            <p><span data-lang="zh">横轴：日期（台北时间） · 纵轴：应用事件数（次／日） · 7/1–9/23 23:27</span><span data-lang="en" hidden>X: date (Taipei time) · Y: application events (per day) · Jul 1–Sep 23, 23:27</span></p>
+          </div>
+          <div class="legend" id="usage-events-legend"></div>
+        </div>
+        <div class="chart-scroll"><svg id="usage-events-chart" role="img"></svg></div>
+        <figcaption class="takeaway"><strong><span data-lang="zh">读图</span><span data-lang="en" hidden>READOUT</span></strong><span data-lang="zh">等长的 1–23 日窗口中，9 月 `viewed` 事件为 14,442 次，是 8 月 171 次的 84.5 倍；创建记录则为 2,038 对 410（4.97 倍）。前者是重复事件数，后者是分享记录数，不是转化率。</span><span data-lang="en" hidden>For equal day-1–23 windows, September had 14,442 `viewed` events, 84.5× August’s 171; creation records were 2,038 vs. 410 (4.97×). The first is a repeatable event count, the second is share records—not a conversion rate.</span></figcaption>
+        <p class="figure-note"><span data-lang="zh">竖线对应 7/19 发布（私密分享、产品／发现页与 remote MCP 迁移），只作时间对照；9/23 标签为 23:27 截点。内容访问含内嵌与直开请求且会重复计数，不是读者数。</span><span data-lang="en" hidden>The vertical marker corresponds to the July 19 release (private sharing, product/discovery pages, and remote MCP migration) for date comparison only; Sep 23 labels use the 23:27 cutoff. Embedded and direct content requests may repeat and do not count readers.</span></p>
+        <div class="chart-data" id="usage-events-data"></div>
+        <div class="chart-data" id="usage-month-data"></div>
+        <p class="figure-note"><span data-lang="zh">月度表分开展示分享记录与 created 事件；9 月有 2,038 条记录、2,027 次事件，11 条记录没有对应事件。</span><span data-lang="en" hidden>The monthly table separates share records from created events: September has 2,038 records and 2,027 events, with no event recorded for 11 records.</span></p>
+      </figure>
+      <figure class="figure-wide">
+        <div class="figure-heading">
+          <div>
+            <h3><span data-lang="zh">截至快照的每条分享累计内容访问计数</span><span data-lang="en" hidden>Cumulative content-request counter per share at snapshot</span></h3>
+            <p><span data-lang="zh">单位：分享记录数 · 分母 2,797 · 不是当月访问量</span><span data-lang="en" hidden>Unit: share records · Denominator 2,797 · Not visits per month</span></p>
+          </div>
+        </div>
+        <div class="support-grid support-two preview-grid">
+          <div class="distribution-axis-group">
+            <p class="axis-caption"><span><b>X</b> · <span data-lang="zh">每条分享的累计请求次数区间</span><span data-lang="en" hidden>cumulative content requests per share (range)</span></span><span><b>Y</b> · <span data-lang="zh">分享记录数（条）</span><span data-lang="en" hidden>share records (count)</span></span></p>
+            <div class="distribution-plot"><div id="request-y-axis" class="distribution-y-axis"></div><div><div id="preview-distribution" class="distribution-chart"></div><p class="distribution-axis-x"><span data-lang="zh">累计内容访问请求次数区间</span><span data-lang="en" hidden>Cumulative content-request range</span></p></div></div>
+          </div>
+          <div class="preview-summary" id="preview-summary"></div>
+        </div>
+        <figcaption class="takeaway"><strong><span data-lang="zh">读图</span><span data-lang="en" hidden>READOUT</span></strong><span data-lang="zh">1,377 条记录有至少一次累计内容访问请求，1,420 条为零；中位数为 0。请求可能重复或来自机器人，不等于独立读者。</span><span data-lang="en" hidden>1,377 records have at least one cumulative content request; 1,420 are zero. The median is zero. Requests may repeat or come from bots, so they are not unique readers.</span></figcaption>
+        <div class="chart-data" id="preview-data"></div>
+      </figure>
+      <div class="support-grid support-two followup-grid">
+        <figure class="figure">
+          <div class="figure-heading">
+            <div><h3><span data-lang="zh">首次请求离创建多久</span><span data-lang="en" hidden>Time from creation to first request</span></h3><p><span data-lang="zh">单位：分享记录 · 分母 2,797 · 7/1 至截点</span><span data-lang="en" hidden>Unit: share records · Denominator 2,797 · Jul 1 to cutoff</span></p></div>
+          </div>
+          <p class="delay-highlight"><strong>1,100 / 1,377 · 79.9%</strong><span><span data-lang="zh">有过内容访问请求的分享，在创建后 1 分钟内出现首次请求。也可能是作者预览或自动检查，不足以证明外部传播。</span><span data-lang="en" hidden>Shares with any content request whose first request arrived within one minute. This may also reflect author previews or automated checks, not proven external sharing.</span></span></p>
+          <div class="chart-data" id="first-request-delay-data"></div>
+        </figure>
+        <figure class="figure">
+          <div class="figure-heading">
+            <div><h3><span data-lang="zh">不同创建标签的 7 日观察窗</span><span data-lang="en" hidden>Seven-day observation windows by creation label</span></h3><p><span data-lang="zh">横轴：记录占比（%，0–100） · 纵轴：创建标签 · 仅含至少 7 日成熟的 9 月记录</span><span data-lang="en" hidden>X: share of records (%, 0–100) · Y: creation label · September records with at least seven days of maturity</span></p></div>
+          </div>
+          <div class="maturity-legend" id="maturity-legend"></div>
+          <div id="mature-cohort-chart" class="maturity-chart"></div>
+          <figcaption class="figure-note"><span data-lang="zh">API 674/817 条成熟记录在 7 日内出现请求，MCP 为 5/201；这些是来源标签下的链接比例，不是用户留存率。</span><span data-lang="en" hidden>674/817 mature API-labeled records and 5/201 MCP-labeled records had a request within seven days. These are link rates by source label, not user-retention rates.</span></figcaption>
+          <div class="chart-data" id="mature-cohort-data"></div>
+        </figure>
+      </div>
+      <figure class="figure outcome-figure">
+        <div class="figure-heading">
+          <div>
+            <h3><span data-lang="zh">快照状态嵌套，不是转化漏斗</span><span data-lang="en" hidden>Nested snapshot states, not a conversion funnel</span></h3>
+            <p><span data-lang="zh">单位：记录数 · 全体 2,797 条快照记录</span><span data-lang="en" hidden>Unit: records · All 2,797 snapshot rows</span></p>
+          </div>
+        </div>
+        <div id="snapshot-funnel" class="snapshot-funnel"></div>
+        <figcaption class="figure-note"><span data-lang="zh">当前 active 状态不代表请求发生时的状态；三层是快照筛选结果，不能当作已连接的用户旅程。</span><span data-lang="en" hidden>Current active status does not show the share’s status when a request occurred; these are snapshot filters, not a linked user journey.</span></figcaption>
+      </figure>
+    </section>
+
+    <section class="question-section" id="q6">
+      <header class="section-heading">
+        <span class="section-index">06</span>
+        <div>
+          <p class="section-kicker"><span data-lang="zh">获客线索、出口地区与作品用途</span><span data-lang="en" hidden>ACQUISITION SIGNALS, EGRESS, AND ARTIFACT USE</span></p>
+          <h2><span data-lang="zh">我们能确认来源、地区和使用场景吗？</span><span data-lang="en" hidden>What can we confirm about source, region, and use?</span></h2>
+        </div>
+        <p class="section-intro"><span data-lang="zh">应用创建标签不是获客来源。单独的浏览器测量留下少量分享页来源线索；请求出口和公开 HTML 分别描述网络位置与作品用途。</span><span data-lang="en" hidden>Application creation labels are not acquisition sources. Separate browser measurement contains a few sharing-page referral clues; request egress and public HTML describe network location and artifact use.</span></p>
+      </header>
+      <aside class="discovery-context">
+        <p class="section-kicker"><span data-lang="zh">获客与分享传播是不同问题</span><span data-lang="en" hidden>ACQUISITION AND CONTENT SHARING ARE DIFFERENT QUESTIONS</span></p>
+        <p><span data-lang="zh">作者自述从未做过任何推广；这不排除他人主动分享或集成复用。7/1 至截点的浏览器来源数据只从 8 月开始有抽样记录：估算 580 次页面加载、550 次 visit 事件；其中 Instagram 与 Gmail 各有 10 次估算 visit，均落在分享页外壳。主站产品页与分享页谁带来创建，历史上仍没有连接证据；空 referrer 530 次应读作直接或未知。本次未取得 Share HTML 的 Search Console 历史数据，专用 GA4 也没有历史事件。</span><span data-lang="en" hidden>The owner reports no promotion; this does not rule out organic sharing or integration reuse. Browser-source data from July 1 to cutoff has sampled rows only from August: an estimated 580 page loads and 550 visit events. Instagram and Gmail each account for 10 estimated visits, all on share-page wrappers. Historical data does not connect product pages or shared content to creation; 530 visits with a blank referrer mean direct-or-unknown. No Share HTML Search Console history was obtained in this study, and the dedicated GA4 has no historical events.</span></p>
+      </aside>
+      <figure class="figure-wide rum-figure">
+        <div class="figure-heading"><div><h3><span data-lang="zh">页面加载估算与可见来源线索</span><span data-lang="en" hidden>Estimated page loads and observed referral clues</span></h3><p><span data-lang="zh">横轴：Cloudflare RUM 抽样估算次数（次，从 0 起） · 纵轴：页面组／referrer · 8/1–9/23（台北时间）</span><span data-lang="en" hidden>X: Cloudflare RUM sampled estimates (count, from zero) · Y: page group / referrer · Aug 1–Sep 23, Taipei time</span></p></div><div class="legend" id="rum-page-legend"></div></div>
+        <div class="rum-panel-grid">
+          <section class="rum-panel"><h4><span data-lang="zh">页面组：主站与分享相关页</span><span data-lang="en" hidden>Page groups: product site and shared content</span></h4><div id="rum-page-chart" class="rum-bars"></div><div class="chart-data" id="rum-page-data"></div></section>
+          <section class="rum-panel"><h4><span data-lang="zh">来源组：只见于分享外壳</span><span data-lang="en" hidden>Referrer groups: only observed on share wrappers</span></h4><div id="rum-referrer-chart" class="rum-bars"></div><div class="chart-data" id="rum-referrer-data"></div></section>
+        </div>
+        <figcaption class="figure-note"><span data-lang="zh">抽样估算共 580 次页面加载、550 次 visit 事件；主站首页与介绍页 300/270，分享外壳与 HTML 内容 280/280。Instagram 与 Gmail 各 10 次估算 visit，均来自分享外壳；这些不是独立人数，也未连到创建事件。</span><span data-lang="en" hidden>The sample estimates 580 page loads and 550 visits: homepage/product pages 300/270, share wrappers/HTML content 280/280. Instagram and Gmail each have 10 estimated visits, both on share wrappers; these are not unique people and are not linked to creation.</span></figcaption>
+      </figure>
+      <div class="usecase-summary">
+        <p class="section-kicker"><span data-lang="zh">使用场景画像，不是用户人口画像</span><span data-lang="en" hidden>USE-CASE SIGNALS, NOT USER DEMOGRAPHICS</span></p>
+        <p><span data-lang="zh">在 2,453 个唯一公开 HTML 中，规则识别出报告研究 298 个、互动作品 261 个、学习教学 117 个、工具 99 个。它描述文件用途，不能推断作者身份；案例见<a href="#q3">第 3 节</a>。按访问请求挑选的前五个文件全部属于 API 标签，人工检查均与教育或课堂活动相关：两份互动课堂知识测验、感谢卡工具、学习结果查询页和计时语言练习。这组目的样本不能代表全体。</span><span data-lang="en" hidden>Among 2,453 unique public HTML artifacts, rules identified 298 reports/research pieces, 261 interactive works, 117 learning artifacts, and 99 tools. These describe files, not creators; see <a href="#q3">section 3</a>. The request-ranked top five were all API-labeled and all related to education or classroom activities: two interactive classroom quizzes, a greeting-card tool, a learning-results lookup, and a timed language exercise. This purposive set is not representative.</span></p>
+      </div>
+      <details class="technical-appendix">
+        <summary><span data-lang="zh">展开技术附录：主站边缘请求、公开路由与声明的爬虫名称</span><span data-lang="en" hidden>Open technical appendix: main-host edge requests, public routes, and claimed crawler names</span></summary>
+        <p class="fineprint"><span data-lang="zh">这是 2026-06-03 至 09-22 UTC 的主站未加权存储观测：111/112 天有数据、8/25 缺失；70,340 条不能当作全量流量或人类访问。它们也不是获客渠道。</span><span data-lang="en" hidden>These are unweighted stored observations for the main host from Jun 3 to Sep 22 UTC: data exists for 111 of 112 days, with Aug 25 missing. The 70,340 observations are neither complete traffic nor human visits, and they are not acquisition channels.</span></p>
+      <figure class="figure-wide">
+        <div class="figure-heading">
+          <div>
+            <h3><span data-lang="zh">主站边缘观测：每日存储样本</span><span data-lang="en" hidden>Main-host edge observations: stored daily sample</span></h3>
+            <p><span data-lang="zh">横轴：日期（UTC） · 纵轴：存储观测（条／日） · 6/3–9/22 共 111/112 个有数据日，8/25 缺失</span><span data-lang="en" hidden>X: date (UTC) · Y: stored observations (per day) · 111 of 112 days have data from Jun 3–Sep 22; Aug 25 is missing</span></p>
+          </div>
+          <div class="legend" id="edge-legend"></div>
+        </div>
+        <div class="edge-small-multiples">
+          <div><p class="mini-axis-title"><span data-lang="zh">互斥基本类别合计</span><span data-lang="en" hidden>Mutually exclusive base classes</span></p><div class="chart-scroll"><svg id="edge-base-chart" role="img"></svg></div></div>
+          <div><p class="mini-axis-title"><span data-lang="zh">旧版 AI user-agent 子集（与上图重叠）</span><span data-lang="en" hidden>Legacy AI user-agent subset (overlaps above)</span></p><div class="chart-scroll"><svg id="edge-ai-chart" role="img"></svg></div></div>
+        </div>
+        <figcaption class="takeaway"><strong><span data-lang="zh">读图</span><span data-lang="en" hidden>READOUT</span></strong><span data-lang="zh">70,340 是没有抽样权重的存储观测总和，不是完整流量或独立用户。8 月 25 日缺数据，图上留空，不当成零。</span><span data-lang="en" hidden>70,340 is a sum of stored observations without sampling weights—not full traffic or unique users. August 25 is missing and remains a gap, not zero.</span></figcaption>
+        <div class="chart-data" id="edge-data"></div>
+      </figure>
+      <div class="support-grid support-two edge-support">
+        <figure class="figure">
+          <div class="figure-heading">
+            <div><h3><span data-lang="zh">主站公开路由请求样本</span><span data-lang="en" hidden>Main-host public-route request sample</span></h3><p><span data-lang="zh">横轴：存储观测请求数（条，从 0 起） · 纵轴：主站路由 · UTC 6/3–9/22；不是获客渠道</span><span data-lang="en" hidden>X: stored request observations (count, zero-based) · Y: main-host route · Jun 3–Sep 22 UTC; not acquisition channels</span></p></div>
+          </div>
+          <div id="discovery-routes" class="route-bars"></div>
+          <div class="chart-data" id="route-data"></div>
+          <figcaption class="figure-note"><span data-lang="zh">robots.txt / sitemap 请求证明有访问，不证明已索引；llms.txt、agent-card、MCP 路径请求也不证明工具成功执行。</span><span data-lang="en" hidden>Requests to robots.txt and sitemap do not prove indexing. Requests to llms.txt, agent-card, or MCP routes do not prove a tool executed successfully.</span></figcaption>
+        </figure>
+        <aside class="annotation annotation-caution">
+          <p class="annotation-label"><span data-lang="zh">口径边界</span><span data-lang="en" hidden>SCOPE LIMIT</span></p>
+          <p><span data-lang="zh">主站边缘数据只有 111/112 天；最近 30 个日历日覆盖 29 天，存储 60,101 条观察。Cloudflare 查询没有抽样权重，并可能受每个查询窗的 10,000 条上限影响。</span><span data-lang="en" hidden>Main-host edge data covers 111/112 days. The latest 30 calendar days include 29 data days and 60,101 stored observations. Cloudflare queries have no sampling weights and may be affected by a 10,000-row per-window limit.</span></p>
+          <p><span data-lang="zh">MCP 于 7 月 19 日后使用 workers.dev 直连；主站 host 不一定涵盖这些调用。主站 /mcp 请求数不能与 MCP 创建数计算转化率。</span><span data-lang="en" hidden>After July 19, direct MCP used a workers.dev origin that may be outside the main-host zone. Main-host /mcp requests cannot be divided by MCP creations as a conversion rate.</span></p>
+        </aside>
+      </div>
+      <details class="data-details crawler-detail">
+        <summary><span data-lang="zh">查看请求头声明的爬虫名称</span><span data-lang="en" hidden>View crawler names claimed in request headers</span></summary>
+        <p class="fineprint"><span data-lang="zh">名称来自请求头归类，不能验证实际客户端或使用者；这里只列安全聚合后的常见名称。</span><span data-lang="en" hidden>Names are grouped from request headers and do not verify the actual client or user. Only commonly observed, safely aggregated labels are shown.</span></p>
+        <div id="claimed-bots" class="route-bars"></div>
+        <div class="chart-data" id="claimed-bots-data"></div>
+      </details>
+      </details>
+
+      <figure class="figure-wide country-figure">
+        <div class="figure-heading">
+          <div>
+            <h3><span data-lang="zh">请求出口的国家／地区</span><span data-lang="en" hidden>Request egress country / region</span></h3>
+            <p id="country-scope"><span data-lang="zh">单位：主站存储观测 · 全期 70,340 条 · UTC 2026-06-03 至 2026-09-22</span><span data-lang="en" hidden>Unit: stored main-host observations · 70,340 full-window observations · 2026-06-03 through 2026-09-22 UTC</span></p>
+          </div>
+          <div class="month-control">
+            <label for="country-period"><span data-lang="zh">时间范围</span><span data-lang="en" hidden>Period</span></label>
+            <select id="country-period" aria-label="Filter request egress regions by period">
+              <option value="all">全期</option>
+              <option value="2026-07">七月</option>
+              <option value="2026-08">八月</option>
+              <option value="2026-09">九月</option>
+            </select>
+          </div>
+        </div>
+        <p class="axis-caption"><span><b>X</b> · <span data-lang="zh">存储观测请求数（条，从 0 起）</span><span data-lang="en" hidden>stored request observations (count, zero-based)</span></span><span><b>Y</b> · <span data-lang="zh">请求出口国家／地区</span><span data-lang="en" hidden>request egress country / region</span></span></p>
+        <div class="country-legend" id="country-legend"></div>
+        <div id="country-bars" class="country-bars"></div>
+        <figcaption class="figure-note"><span data-lang="zh">这是请求出口的粗略 GeoIP 国家／地区，不是访问者的真实所在地、国籍或人数；云端 Agent、VPN 和代理会改变出口位置。月份视图为 7–9 月，含八月缺日且九月截至 22 日。</span><span data-lang="en" hidden>This is a coarse GeoIP estimate of request egress, not a visitor’s true location, nationality, or count; cloud agents, VPNs, and proxies can change the region. Monthly views cover July–September, include the August data gap, and end September 22.</span></figcaption>
+        <div class="chart-data" id="country-data"></div>
+      </figure>
+    </section>
+    <section class="question-section" id="q7">
+      <header class="section-heading">
+        <span class="section-index">07</span>
+        <div>
+          <p class="section-kicker"><span data-lang="zh">改动之后的证据</span><span data-lang="en" hidden>EVIDENCE AFTER CHANGES</span></p>
+          <h2><span data-lang="zh">记录增长、内容访问与发现信号，彼此并不同步。</span><span data-lang="en" hidden>Creation growth, content requests, and discovery signals do not move together.</span></h2>
+        </div>
+        <p class="section-intro"><span data-lang="zh">等长窗口显示 API 标签主导创建增量；少数互动学习文件占了较多内容请求；机器观测也在 7 月改动后变多，但现有数据不能把三者连成因果链。</span><span data-lang="en" hidden>Equal windows show API labels leading creation growth; a few interactive-learning files account for many content requests; machine-classified observations also rose after July changes. The data do not connect these into a causal chain.</span></p>
+      </header>
+      <div class="evidence-chains" id="evidence-chains"></div>
+      <figure class="figure-wide impact-figure">
+        <div class="figure-heading"><div><h3><span data-lang="zh">九月创建增量主要落在 API 标签</span><span data-lang="en" hidden>Most of September’s creation increase carries an API label</span></h3><p><span data-lang="zh">横轴：净增创建记录（条，从 0 起） · 纵轴：调用方来源标签 · 两个等长窗口：8/1–23 对 9/1–23</span><span data-lang="en" hidden>X: net increase in creation records (count, from zero) · Y: caller-supplied source label · Equal windows: Aug 1–23 vs Sep 1–23</span></p></div></div>
+        <div id="impact-source-chart" class="impact-source-bars"></div>
+        <figcaption class="takeaway"><strong><span data-lang="zh">判断</span><span data-lang="en" hidden>READOUT</span></strong><span data-lang="zh">1,628 条净增中，API 标签增加 1,404 条（86.2%）；这是创建入口结构，不是用户来源或已验证的人工采用。</span><span data-lang="en" hidden>Of 1,628 net new records, 1,404 (86.2%) carry an API label. This describes creation-path mix, not acquisition or verified human adoption.</span></figcaption>
+        <div class="chart-data" id="impact-source-data"></div>
+      </figure>
+      <div class="timeline-heading">
+        <div><p class="section-kicker"><span data-lang="zh">产品时间线</span><span data-lang="en" hidden>PRODUCT TIMELINE</span></p><h3><span data-lang="zh">代码改动与已核实部署分开标记</span><span data-lang="en" hidden>Code changes and verified deployments are marked separately</span></h3></div>
+        <p><span data-lang="zh">时间：Asia/Taipei · 提交日期不等于上线日期</span><span data-lang="en" hidden>Timezone: Asia/Taipei · Commit dates are not release dates</span></p>
+      </div>
+      <div class="timeline-lane">
+        <h4><span data-lang="zh">产品与代码</span><span data-lang="en" hidden>Product and code</span></h4>
+        <div id="product-timeline" class="timeline-items"></div>
+      </div>
+      <div class="timeline-lane measurement-lane">
+        <h4><span data-lang="zh">测量覆盖</span><span data-lang="en" hidden>Measurement coverage</span></h4>
+        <div id="measurement-timeline" class="timeline-items"></div>
+      </div>
+      <p class="causality-note"><span data-lang="zh">已找到 6 月生产构建证据和 7 月 19 日对应代码的部署记录，但这不能证明部署导致后续变化。7 月 19 日将私密分享、发现页和 MCP 改动集中发布；前后观察窗仅各 14 天，创建数 25→5，而边缘已验证机器人观测 71→450（旧 AI UA 子集 70→395，重叠不相加）。边缘数据未加权且与创建统计时区不同，这只是并行变化。</span><span data-lang="en" hidden>Production-build evidence exists for June, and July 19 deployments map to code changes, but this does not show that releases caused later changes. July 19 bundled private sharing, discovery pages, and MCP updates. The adjacent 14-day windows show 25→5 creations and 71→450 verified-bot edge observations (legacy AI-UA subset 70→395; overlapping, not additive). Edge data is unweighted and uses a different timezone; these are parallel changes.</span></p>
+      <details class="data-details chronology-detail">
+        <summary><span data-lang="zh">展开：API／MCP 内容访问、7/19 对照窗与分组集中度</span><span data-lang="en" hidden>Expand: API/MCP outcomes, July 19 comparison windows, and grouping concentration</span></summary>
+        <div id="impact-evidence-tables" class="evidence-detail-grid"></div>
+        <div id="milestone-evidence" class="evidence-detail-grid"></div>
+      </details>
+    </section>
+
+    <section class="decision-section" id="decisions">
+      <p class="section-kicker"><span data-lang="zh">产品决策</span><span data-lang="en" hidden>PRODUCT DECISIONS</span></p>
+      <h2><span data-lang="zh">先补上证据链，再判断要加码哪种分发。</span><span data-lang="en" hidden>Close the evidence gaps before doubling down on distribution.</span></h2>
+      <ol class="decision-list">
+        <li><strong><span data-lang="zh">让创建入口可验证</span><span data-lang="en" hidden>Make creation paths verifiable</span></strong><p><span data-lang="zh">以服务端受控枚举记录入口、方法和成功结果，避免让调用方自由文本承担归因。</span><span data-lang="en" hidden>Record source, method, and outcome with server-controlled enums instead of free-text attribution from callers.</span></p></li>
+        <li><strong><span data-lang="zh">分别测量 SEO 与 GEO</span><span data-lang="en" hidden>Measure SEO and GEO separately</span></strong><p><span data-lang="zh">搜索曝光/点击、AI 搜索请求、浏览器来源、创建成功是不同事件；把可连接的匿名事件分层保存。</span><span data-lang="en" hidden>Search impressions/clicks, AI-search requests, browser referrals, and successful creation are different events. Store linkable, privacy-conscious events separately.</span></p></li>
+        <li><strong><span data-lang="zh">给 WebMCP 和 remote MCP 加结果遥测</span><span data-lang="en" hidden>Instrument WebMCP and remote MCP outcomes</span></strong><p><span data-lang="zh">记录注册/支持情况、实际方法调用、结果与失败，区分浏览器 WebMCP 的 API 请求和 remote MCP handler。</span><span data-lang="en" hidden>Record support/registration, method calls, results, and failures. Distinguish browser WebMCP API requests from remote MCP handlers.</span></p></li>
+        <li><strong><span data-lang="zh">维持单页交付质量</span><span data-lang="en" hidden>Keep single-page delivery reliable</span></strong><p><span data-lang="zh">公开 HTML 显示多样任务需求；继续确保链接打开快、内容隔离、移动端可用。分类覆盖不足前，不把单一类别当作市场定论。</span><span data-lang="en" hidden>Public HTML shows varied tasks. Keep links fast, isolated, and usable on mobile. Do not treat one category as the market verdict while classification coverage remains incomplete.</span></p></li>
+      </ol>
+    </section>
+
+    <section class="measurement-note">
+      <div>
+        <p class="section-kicker"><span data-lang="zh">未来测量</span><span data-lang="en" hidden>PROSPECTIVE MEASUREMENT</span></p>
+        <h2><span data-lang="zh">新 GA4 与服务端事件只会补未来，不会补历史。</span><span data-lang="en" hidden>New GA4 and server events can measure the future, not backfill history.</span></h2>
+      </div>
+      <p><span data-lang="zh">Share HTML 已准备独立 GA4 测量；本报告截点没有该产品的 GA 历史事件。博客属性完全排除。服务端页面请求与 agent 方法遥测也要等部署及首次生产事件核实后，才能用于后续报告。历史 agent 活动仍以应用记录与受限的 Cloudflare 主站观测为准。</span><span data-lang="en" hidden>A separate Share HTML GA4 measurement is prepared; no product-specific GA history exists at this report cutoff. Blog-property data is excluded. Server page requests and agent-method telemetry belong in future reports only after deployment and a first production event are verified. Historical agent activity here uses application records and limited Cloudflare main-host observations.</span></p>
+    </section>
+
+    <section class="method-section" id="method">
+      <header class="section-heading">
+        <span class="section-index">+</span>
+        <div><p class="section-kicker"><span data-lang="zh">方法与边界</span><span data-lang="en" hidden>METHOD AND LIMITS</span></p><h2><span data-lang="zh">哪些结论成立，哪些还不能成立？</span><span data-lang="en" hidden>Which conclusions hold—and which do not?</span></h2></div>
+        <p class="section-intro"><span data-lang="zh">同一份匿名聚合数据在两种语言中共用；语言切换不改变分母。</span><span data-lang="en" hidden>Both languages use the same privacy-filtered aggregates; switching language does not change denominators.</span></p>
+      </header>
+      <details open>
+        <summary><span data-lang="zh">数据源、时间与分母</span><span data-lang="en" hidden>Sources, dates, and denominators</span></summary>
+        <div class="method-copy">
+          <p><span data-lang="zh">主快照覆盖 2026-07-01 至 2026-09-23 23:27:28（Asia/Taipei），共 2,797 条分享记录：2,659 条 public_unlisted、138 条 private_link；其中 2,786 条有创建事件。截点状态为 2,778 条 active、10 条 needs_review、7 条 failed、2 条 uploading。active 是数据库状态标记，不等于逐条验证当前可访问。九月为 23 个日历日窗口。内容分析使用 2,453 个状态标记为 active 的唯一公开 HTML；来源交叉表使用 2,640 条状态标记为 active 的公开链接。私密 HTML 未抓取。</span><span data-lang="en" hidden>The primary snapshot covers 2026-07-01 through 2026-09-23 23:27:28 (Asia/Taipei), with 2,797 share records: 2,659 public_unlisted and 138 private_link; 2,786 have a creation event. At cutoff, 2,778 are marked active, 10 needs_review, 7 failed, and 2 uploading. “Active” is a database status label, not a per-link check of current accessibility. September covers 23 calendar days. Content analysis uses 2,453 unique public HTML artifacts marked active; the source cross-tab uses 2,640 public links marked active. Private HTML was not fetched.</span></p>
+          <p><span data-lang="zh">创建来源是可选的调用方标签：API 1,497、MCP 1,132、direct 111、其他 17、缺失 40。direct 是网页 UI 路径标签，不是 referrer。API 不证明人工操作，MCP 不证明 ChatGPT 或特定代理。</span><span data-lang="en" hidden>Creation source is an optional caller-supplied label: API 1,497; MCP 1,132; direct 111; other 17; missing 40. “direct” marks the web UI path, not a referrer. API does not prove human operation; MCP does not identify ChatGPT or a specific agent.</span></p>
+        </div>
+      </details>
+      <details>
+        <summary><span data-lang="zh">静态分类与人工抽查</span><span data-lang="en" hidden>Static classification and manual review</span></summary>
+        <div class="method-copy">
+          <p><span data-lang="zh">状态标记为 active 的 2,453 个唯一公开文件全部通过 HTTP 成功读取。解析标题、meta、H1–H3、可见文本、表单/画布等标记及少量脚本库名称；没有运行上传脚本或加载外部资源。类别依简明关键词规则单标签匹配：标题、描述和标题层级权重较高，正文每个词的贡献有限；低分与并列项目保留未分类。“规则匹配强度”不是经校准的语义置信度。</span><span data-lang="en" hidden>All 2,453 unique public artifacts marked active were successfully retrieved over HTTP. Parsing covered title, metadata, H1–H3, visible text, form/canvas tags, and a small set of script-library names. Uploaded scripts and remote resources were not run or loaded. A simple single-label keyword rule weights title, description, and headings more heavily; body-word contributions are bounded. Low scores and unresolved ties stay unclassified. “Rule match strength” is not calibrated semantic confidence.</span></p>
+          <p><span data-lang="zh">研究者抽查 90 个未分类样本，按大标题簇与语言分层选取，不是随机抽样，不能外推占比。未分类常见原因包括品牌标题、语言词汇缺口、静态页面文字很少或内容需在浏览器执行后才出现；它不等于无用途。HTML lang 是声明，不是经验证的语言，也不代表用户所在地。</span><span data-lang="en" hidden>A reviewer inspected 90 unclassified samples selected from large title clusters and language strata. This was not a random sample and cannot estimate population shares. Common reasons include brand-only titles, multilingual vocabulary gaps, little static text, or content rendered only in a browser. Unclassified does not mean purposeless. HTML lang is a declaration, not verified language or user location.</span></p>
+          <p id="feature-method"></p>
+        </div>
+      </details>
+      <details>
+        <summary><span data-lang="zh">重复、内容访问与隐私</span><span data-lang="en" hidden>Repeats, content requests, and privacy</span></summary>
+        <div class="method-copy">
+          <p><span data-lang="zh">快照中的内容访问计数是每条链接的累计请求数，包含分享页内嵌加载与直接打开 HTML；该计数无法区分两种打开方式。另有带时间戳的应用事件汇总，可按日查看请求、按分享记录计算首次请求延迟及固定 7 日观察窗。事件可能重复或由自动化触发，不能识别独立读者或用户留存；当前状态与累计计数也不是时间顺序漏斗。</span><span data-lang="en" hidden>Snapshot content-request counts are cumulative per link and include both embedded loads and direct HTML opens; the counters cannot distinguish the two. A separate timestamped application-event aggregate provides daily requests, first-request delay by share, and fixed seven-day follow-up windows. Events may repeat or be automated and do not identify unique readers or user retention. Current status and cumulative counters are not a chronological funnel.</span></p>
+          <p><span data-lang="zh">7/1 至截点的应用日志共有 14,969 次 viewed 事件；快照中 7–9 月创建链接的累计计数合计 14,939 次，差额 30 次来自 7 月前创建的链接。因此，事件时间序列与按创建月分组的快照累计数是不同总体。</span><span data-lang="en" hidden>Application logs contain 14,969 viewed events from July 1 to cutoff. Cumulative counters on links created from July through September sum to 14,939; the difference of 30 requests belongs to links created before July. The event time series and snapshot counters grouped by creation month therefore cover different populations.</span></p>
+          <p><span data-lang="zh">精确 hash 只识别字节完全一致内容。标题骨架统计经过日期/版本号正规化，并排除空指纹；相似标题不能证明同一个文件、模板或用户。</span><span data-lang="en" hidden>Exact hashes detect byte-identical content only. Title-pattern counts normalize dates and version numbers and exclude empty fingerprints. Similar titles do not prove the same file, template, or user.</span></p>
+          <p><span data-lang="zh">原始快照和公开 HTML 可能包含标识信息。本报告只发布匿名汇总和广义改写案例，不发布原始标题、slug、链接、文件全文、用户标识或 IP/UA 群组键。IP 和 UA 分组不代表个人。</span><span data-lang="en" hidden>The raw snapshot and public HTML may contain identifying information. This report publishes aggregate figures and broad paraphrases only; it omits raw titles, slugs, links, full files, user identifiers, and IP/UA group keys. IP and UA groups do not represent people.</span></p>
+        </div>
+      </details>
+      <details>
+        <summary><span data-lang="zh">Cloudflare、GA4 与因果边界</span><span data-lang="en" hidden>Cloudflare, GA4, and causality</span></summary>
+        <div class="method-copy">
+          <p><span data-lang="zh">Cloudflare 主站边缘聚合覆盖 2026-06-03 至 09-22 UTC 的 111/112 天；8 月 25 日缺一日。70,340 是未加权的存储观测列，不是完整请求数。基础类别含 49,709 条未匹配／旧 human fallback、17,612 条未验证机器人规则、3,019 条 verified bot；1,852 条旧 AI UA 是重叠子集。采集使用 httpRequestsAdaptive，每查询窗 10,000 条上限且未保存抽样权重；请求数不得解读为人类流量或全量访问。</span><span data-lang="en" hidden>Cloudflare main-host data covers 111/112 days from 2026-06-03 through 2026-09-22 UTC; August 25 is missing. The 70,340 records are unweighted stored observations, not complete request counts. Base classes include 49,709 unmatched/legacy human fallback, 17,612 unverified-bot heuristic, and 3,019 verified-bot observations. The 1,852 legacy AI-UA observations overlap the base total. The collector uses httpRequestsAdaptive with a 10,000-row per-window limit and stores no sampling weights; counts are not human traffic or all visits.</span></p>
+          <p><span data-lang="zh">浏览器 RUM 的 estimate 间隔为 10，展示值已是估算结果，没有再次乘以 10。8 月至截点共有 580 次估算页面加载、550 次估算 visit；其中 Cloudflare 标记 bot_flag=1 的 visit 估算为 170，=0 为 380。两个标记都不能确认真实人机，visit 也不是独立人数；7 月没有返回样本，不等于零访问。</span><span data-lang="en" hidden>Browser RUM used an estimate interval of 10; displayed values are already estimates and were not multiplied again. From August to cutoff, it estimates 580 page loads and 550 visits; 170 estimated visits have Cloudflare bot_flag=1 and 380 have flag=0. Neither flag establishes whether a visit is human, and visits are not unique people. July returned no samples, which does not mean zero visits.</span></p>
+          <p><span data-lang="zh">国家／地区按请求出口汇总，基础类别互斥且合计 70,340；未知出口单独保留。国家标签是粗略网络出口估计，不是人的所在地；AI UA 观测是重叠子集，没有再次相加。</span><span data-lang="en" hidden>Country/region totals group request egress; mutually exclusive base classes sum to 70,340, with unknown egress kept separately. Labels are coarse network-egress estimates, not people’s locations; AI-UA observations overlap and are not added again.</span></p>
+          <p><span data-lang="zh">7 月 19 日后 remote MCP 使用 workers.dev；主站 edge 不一定包含直接调用。本次未取得 Share HTML 的 Search Console 历史数据；历史报告也没有该产品专用 GA4 记录，博客 GA 数据排除。新建独立 GA 只能从未来上线后采集，不能补历史。提交日期不等于上线日期；同时发生的更改、缺少搜索曝光／引用和未连接的创建结果，使因果提升不可估计。</span><span data-lang="en" hidden>After July 19, remote MCP used workers.dev, which may be absent from main-host edge data. No Share HTML Search Console history was obtained in this study. Historical reports also have no product-specific GA4 records; blog GA data is excluded. A new dedicated GA stream can collect only after future launch and cannot backfill history. Commit dates are not release dates. Bundled changes, missing search impressions/citations, and unlinked creation outcomes prevent causal-lift estimates.</span></p>
+        </div>
+      </details>
+      <details>
+        <summary><span data-lang="zh">图表方法参考</span><span data-lang="en" hidden>Figure-method references</span></summary>
+        <div class="method-copy">
+          <p><span data-lang="zh">图表规范参考：Kassis, T., Agarwal, V., He, Y., Patel, D., &amp; Brueckner, A. M. (2026), <em>Scientific Agent Skills: A Library of Procedural Knowledge for Research Agents</em>, <a href="https://doi.org/10.48550/arXiv.2609.00065" rel="noopener noreferrer">doi:10.48550/arXiv.2609.00065</a>；<a href="https://research-figure-guide.nature.com/figures/preparing-figures-our-specifications/" rel="noopener noreferrer">Nature Figure Preparation</a> 与 <a href="https://matplotlib.org/stable/users/explain/colors/colormaps.html" rel="noopener noreferrer">Matplotlib colormap guidance</a>。以上为可视化方法参考，不是本报告数据来源。</span><span data-lang="en" hidden>Figure guidance: Kassis, T., Agarwal, V., He, Y., Patel, D., &amp; Brueckner, A. M. (2026), <em>Scientific Agent Skills: A Library of Procedural Knowledge for Research Agents</em>, <a href="https://doi.org/10.48550/arXiv.2609.00065" rel="noopener noreferrer">doi:10.48550/arXiv.2609.00065</a>; <a href="https://research-figure-guide.nature.com/figures/preparing-figures-our-specifications/" rel="noopener noreferrer">Nature Figure Preparation</a>; and <a href="https://matplotlib.org/stable/users/explain/colors/colormaps.html" rel="noopener noreferrer">Matplotlib colormap guidance</a>. These inform visualization only and are not data sources.</span></p>
+        </div>
+      </details>
+      <div class="download-row">
+        <button id="download-json" type="button"><span data-lang="zh">下载匿名聚合 JSON</span><span data-lang="en" hidden>Download privacy-filtered JSON</span></button>
+        <button id="download-csv" type="button"><span data-lang="zh">下载月度 CSV</span><span data-lang="en" hidden>Download monthly CSV</span></button>
+      </div>
+    </section>
+  </main>
+
+  <footer class="page-footer">
+    <div><strong>Share HTML / Product Research</strong><span> · 2026.09.23</span></div>
+    <p><span data-lang="zh">报告描述记录、公开成品与有限发现信号，不估算个人或市场规模。</span><span data-lang="en" hidden>This report describes records, public artifacts, and limited discovery signals. It does not estimate people or market size.</span></p>
+  </footer>
+</body>
+</html>
