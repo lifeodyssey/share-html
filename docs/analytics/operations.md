@@ -4,7 +4,7 @@ The historical report is frozen at 2026-09-23 15:27:28.147672 UTC (23:27 Taipei)
 
 ## Why first-party measurement is the primary store
 
-GA4 remains useful for consenting browser acquisition and conversion reporting. It automatically excludes known bot traffic and does not report how much was excluded. It therefore cannot serve as the primary agent-use ledger. The first-party Worker records actual MCP/HTTP outcomes and minimized request evidence in Supabase; its business records remain authoritative if background telemetry fails.
+GA4 remains useful for eligible browser acquisition and conversion reporting. It automatically excludes known bot traffic and does not report how much was excluded. It therefore cannot serve as the primary agent-use ledger. The first-party Worker records actual MCP/HTTP outcomes and minimized request evidence in Supabase; its business records remain authoritative if background telemetry fails.
 
 Official references checked September 23, 2026:
 
@@ -26,25 +26,29 @@ Official references checked September 23, 2026:
 
 ## Optional browser measurement
 
-The preference notice is non-blocking. Optional browser/session analytics starts only after an affirmative choice, respects Do Not Track / Global Privacy Control, and can be turned off again from Analytics preferences. A sessionStorage UUID connects events within a tab; it is not a person or durable cross-device identity. No filenames, document titles, uploaded HTML, share IDs/slugs, fragments, access keys or arbitrary query strings enter the analytics payload. Routes are templates. Only bounded UTM tokens and an external referrer hostname are retained. Denial removes the optional tab context; coarse service events remain independent.
+The preference notice is non-blocking. When service analytics is enabled, browser/session analytics is on by default if no preference is stored, and can be turned off from Analytics preferences. Existing opt-outs remain off. Do Not Track / Global Privacy Control override the default, and unreadable preference storage prevents collection. A sessionStorage UUID connects events within a tab; it is not a person or durable cross-device identity. No filenames, document titles, uploaded HTML, share IDs/slugs, fragments, access keys or arbitrary query strings enter the analytics payload. Routes are templates. Only bounded UTM tokens and an external referrer hostname are retained. Denial removes the optional tab context; coarse service events remain independent.
 
-The production configuration targets the dedicated **Share HTML** GA4 property (555549679), separate from the **zhenjia.dev** blog property. Its only web stream is **Share HTML web**, `https://sharehtml.zhenjia.dev`, measurement ID `G-8B4LL2C8L7`. On September 24 (Taipei), the stream settings were reopened and Enhanced measurement was confirmed **off**, with zero connected site tags. The resource's Events page also confirmed `share_created` as a key event. Cookie names use the `sharehtml` prefix and are scoped to the current product hostname rather than the shared parent domain. The consent notice names Google Analytics. See the validation record for actual deployment and collection evidence.
+The production configuration targets the dedicated **Share HTML** GA4 property (555549679), separate from the **zhenjia.dev** blog property. Its only web stream is **Share HTML web**, `https://sharehtml.zhenjia.dev`, measurement ID `G-8B4LL2C8L7`. On September 24 (Taipei), the stream settings were reopened and Enhanced measurement was confirmed **off**, with zero connected site tags. The resource's Events page also confirmed `share_created` as a key event. Cookie names use the `sharehtml` prefix and are scoped to the current product hostname rather than the shared parent domain. The analytics preference notice names Google Analytics. See the validation record for actual deployment and collection evidence.
 
 To configure a replacement stream safely:
 
 1. Use a dedicated Share HTML property and web stream in the user's GA account (Editor access needed for stream settings). Do not reuse the blog property, tag, or cookie namespace.
 2. Disable **Enhanced measurement**, including automatic form, download, click and history events. This app handles private links and must not let automatic collection inspect raw URLs or form interactions.
 3. Set public Worker variable `GA4_MEASUREMENT_ID` to that stream's `G-...` ID and `GA4_AUTOMATIC_EVENTS_DISABLED=true` only after verifying the setting. No GA API secret is needed.
-4. Check GA DebugView/realtime with consent granted. Only manually sanitized events are sent: `page_view`, `upload_started`, `upload_failed`, `share_link_copied`, `share_created`. Confirm `share_created` as a key event if desired. Add event-scoped custom dimensions for `transport`, `actor_evidence`, `referrer_domain` and `acquisition_*` as useful.
+4. Check GA DebugView/realtime with analytics enabled and DNT/GPC absent. Only manually sanitized events are sent: `page_view`, `upload_started`, `upload_failed`, `share_link_copied`, `share_created`. Confirm `share_created` as a key event if desired. Add event-scoped custom dimensions for `transport`, `actor_evidence`, `referrer_domain` and `acquisition_*` as useful.
 5. Verify denial makes no browser telemetry/Google requests and private `/s/` pages never initialize GA. Uploaded `/v/` HTML is never modified to inject analytics.
 
 Without an ID and verified auto-collection setting, the server does not expose an ID and the browser never loads Google's script. GA configuration is optional for the primary telemetry to function. No historic data is backfilled to GA.
 
+## Coverage change on September 26, 2026
+
+The September 26 client change switches the unset browser preference from off to on; stored opt-outs remain off, and DNT/GPC and unreadable storage still prevent collection. Use the Cloudflare deployment history and the release pull request for the confirmed production timestamp. Use the confirmed deployment time as the coverage boundary, not the change date. Browser, WebMCP and GA counts before and after that boundary are not directly comparable as product growth: the eligible collection population changed. Server measurement remains independent. The historical report cutoff and its data remain frozen.
+
 ## Interpretation
 
-- `page_served` covers successful GET HTML responses for homepage, marketing pages and share wrappers, including crawler requests without browser consent. It excludes HEAD and errors, is separate from `discovery_read` and `preview_served`, and does not prove a human or protected-preview access. Apply the additive `page_served` event-name constraint migration before deploying this coverage.
+- `page_served` covers successful GET HTML responses for homepage, marketing pages and share wrappers, including crawler requests regardless of browser analytics preferences. It excludes HEAD and errors, is separate from `discovery_read` and `preview_served`, and does not prove a human or protected-preview access. Apply the additive `page_served` event-name constraint migration before deploying this coverage.
 - The internal `preview_served` event and historical `viewed` counter both describe successful HTML content requests, including iframe loads and direct document opens. Use “content requests” in product reports. Historical counters do not distinguish the two contexts; a share-wrapper response alone is a separate `page_served` event.
-- Browser `page_view` and server `page_served` can describe the same navigation; never sum them. Server response counts provide a request-activity denominator; consented session events provide a different browser-funnel denominator. Neither counts unique people, and no-consent/cache/client-navigation differences prevent one-to-one reconciliation.
+- Browser `page_view` and server `page_served` can describe the same navigation; never sum them. Server response counts provide a request-activity denominator; eligible tab-session events provide a different browser-funnel denominator. Neither counts unique people, and opt-out, privacy-signal, storage, cache and client-navigation differences prevent one-to-one reconciliation.
 
 - Compare canonical persisted share creations with `share_created` event coverage; timeouts can lose background telemetry. The Google browser key event is emitted only for an `active` upload result. First-party server `share_created` records retain both success and blocked outcomes; filter `outcome='success'` when counting completed creations.
 - `transport='mcp'` is established by the MCP handler. A client-controlled source label cannot change it. HTTP uploads include browser and automation clients.

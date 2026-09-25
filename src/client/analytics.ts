@@ -1,7 +1,7 @@
 type Acquisition = { source?: string; medium?: string; campaign?: string; referrer_domain?: string };
 type Config = { analyticsEnabled?: boolean; ga4MeasurementId?: string };
 export type BrowserEvent = "page_view" | "upload_started" | "upload_failed" | "share_link_copied";
-export type Consent = "granted" | "denied" | null;
+export type Consent = "granted" | "denied";
 type Context = { session_id: string; acquisition: Acquisition };
 
 const CONSENT_KEY = "sharehtml.analytics.consent";
@@ -12,6 +12,7 @@ let config: Config = {};
 let context: Context | null = null;
 let configuredGa: string | null = null;
 let lastPage: string | null = null;
+let inMemoryConsent: Consent | null = null;
 
 type AnalyticsWindow = Window & {
   dataLayer?: unknown[];
@@ -25,14 +26,21 @@ export function privacySignal(): boolean {
 
 export function readAnalyticsConsent(): Consent {
   if (typeof window === "undefined" || privacySignal()) return "denied";
+  if (inMemoryConsent) return inMemoryConsent;
   try {
     const value = window.localStorage.getItem(CONSENT_KEY);
-    return value === "granted" || value === "denied" ? value : null;
+    return value === "granted" || value === "denied" ? value : "granted";
   } catch { return "denied"; }
 }
 
-export function setAnalyticsConsent(consent: Exclude<Consent, null>): void {
-  try { window.localStorage.setItem(CONSENT_KEY, consent); } catch { return; }
+export function setAnalyticsConsent(consent: Consent): void {
+  try {
+    window.localStorage.setItem(CONSENT_KEY, consent);
+    inMemoryConsent = null;
+  } catch {
+    // A failed preference write must not prevent opting out in this page.
+    inMemoryConsent = consent;
+  }
   if (consent === "denied") {
     context = null;
     lastPage = null;

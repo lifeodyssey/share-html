@@ -2,7 +2,7 @@
 
 Usage research is available at [`/report/0923`](https://sharehtml.zhenjia.dev/report/0923). The September 23, 2026 report uses a frozen snapshot and publishes only aggregated findings and anonymized use cases.
 
-First-party analytics separates browser reports, HTTP/MCP business outcomes, acquisition signals, and bot evidence. See the [measurement contract](docs/analytics/measurement-contract.md) and [operations guide](docs/analytics/operations.md) for consent, data limits, retention, and GA4 configuration. Apply the analytics migrations before deploying with `ANALYTICS_ENABLED=true`. Consenting browser events use the separate Share HTML GA4 property; enhanced measurement is disabled and private share pages do not send Google events.
+First-party analytics separates browser reports, HTTP/MCP business outcomes, acquisition signals, and bot evidence. See the [measurement contract](docs/analytics/measurement-contract.md) and [operations guide](docs/analytics/operations.md) for analytics preferences, data limits, retention, and GA4 configuration. Apply the analytics migrations before deploying with `ANALYTICS_ENABLED=true`. Browser analytics is enabled by default when the service is enabled and can be turned off in Analytics preferences; existing opt-outs, DNT/GPC, and unreadable preference storage prevent collection. Eligible browser events use the separate Share HTML GA4 property; enhanced measurement is disabled and private share pages do not send Google events.
 
 <p align="center">
   <a href="https://sharehtml.zhenjia.dev">
