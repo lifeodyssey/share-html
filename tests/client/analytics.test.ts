@@ -6,21 +6,73 @@ beforeEach(() => {
   sessionStorage.clear();
   delete (window as Window & { dataLayer?: unknown }).dataLayer;
   delete (window as Window & { gtag?: unknown }).gtag;
+  delete (window as unknown as Record<string, unknown>)["ga-disable-G-TEST12345"];
+  Object.defineProperty(navigator, "doNotTrack", { configurable: true, value: "0" });
+  Object.defineProperty(navigator, "globalPrivacyControl", { configurable: true, value: false });
   window.history.replaceState({}, "", "/");
   vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(null, { status: 204 })));
 });
-afterEach(() => { vi.unstubAllGlobals(); document.querySelectorAll('script[src*="googletagmanager"]').forEach((s) => s.remove()); });
+afterEach(() => { vi.restoreAllMocks(); vi.unstubAllGlobals(); document.querySelectorAll('script[src*="googletagmanager"]').forEach((s) => s.remove()); });
 
-test("optional telemetry stays off until consent; denial prevents both session storage and network calls", async () => {
+test("a new visitor gets sanitized browser and Google analytics without a preference click", async () => {
   const a = await import("../../src/client/analytics");
-  a.configureAnalytics({ analyticsEnabled: true });
+  a.configureAnalytics({ analyticsEnabled: true, ga4MeasurementId: "G-TEST12345" });
+  a.trackPage("/");
+  expect(a.readAnalyticsConsent()).toBe("granted");
+  expect(localStorage.getItem("sharehtml.analytics.consent")).toBeNull();
+  expect(fetch).toHaveBeenCalledTimes(1);
+  expect(document.querySelector('script[src*="googletagmanager"]')).not.toBeNull();
+  const layer = (window as unknown as { dataLayer: unknown[] }).dataLayer;
+  expect(layer.map(entry => Array.from(entry as ArrayLike<unknown>)))
+    .toContainEqual(["event", "page_view", expect.objectContaining({ page_location: window.location.origin + "/" })]);
+});
+
+test("an existing opt-out prevents session storage, browser events and Google loading", async () => {
+  localStorage.setItem("sharehtml.analytics.consent", "denied");
+  const a = await import("../../src/client/analytics");
+  a.configureAnalytics({ analyticsEnabled: true, ga4MeasurementId: "G-TEST12345" });
   a.trackBrowserEvent("page_view");
   expect(fetch).not.toHaveBeenCalled();
   expect(a.uploadAnalyticsContext()).toBeNull();
-  a.setAnalyticsConsent("denied");
   a.trackBrowserEvent("upload_started");
   expect(fetch).not.toHaveBeenCalled();
   expect(sessionStorage.length).toBe(0);
+  expect(document.querySelector('script[src*="googletagmanager"]')).toBeNull();
+});
+
+test.each(["doNotTrack", "globalPrivacyControl"])("%s overrides the default and explicit enablement", async (signal) => {
+  Object.defineProperty(navigator, signal, { configurable: true, value: signal === "doNotTrack" ? "1" : true });
+  const a = await import("../../src/client/analytics");
+  a.configureAnalytics({ analyticsEnabled: true, ga4MeasurementId: "G-TEST12345" });
+  a.trackPage("/");
+  a.setAnalyticsConsent("granted");
+  a.trackBrowserEvent("upload_started");
+  expect(a.readAnalyticsConsent()).toBe("denied");
+  expect(fetch).not.toHaveBeenCalled();
+  expect(sessionStorage.length).toBe(0);
+  expect(document.querySelector('script[src*="googletagmanager"]')).toBeNull();
+});
+
+test("opting out still disables an initialized Google tag when saving the preference fails", async () => {
+  const a = await import("../../src/client/analytics");
+  a.configureAnalytics({ analyticsEnabled: true, ga4MeasurementId: "G-TEST12345" });
+  a.trackPage("/");
+  vi.spyOn(Storage.prototype, "setItem").mockImplementation(() => { throw new Error("Storage unavailable"); });
+  a.setAnalyticsConsent("denied");
+  a.trackBrowserEvent("upload_started");
+  expect(a.readAnalyticsConsent()).toBe("denied");
+  expect(fetch).toHaveBeenCalledTimes(1);
+  expect(sessionStorage.length).toBe(0);
+  expect((window as unknown as Record<string, unknown>)["ga-disable-G-TEST12345"]).toBe(true);
+});
+
+test("unreadable saved preferences do not enable analytics", async () => {
+  vi.spyOn(Storage.prototype, "getItem").mockImplementation(() => { throw new Error("Storage unavailable"); });
+  const a = await import("../../src/client/analytics");
+  a.configureAnalytics({ analyticsEnabled: true, ga4MeasurementId: "G-TEST12345" });
+  a.trackPage("/");
+  expect(fetch).not.toHaveBeenCalled();
+  expect(document.querySelector('script[src*="googletagmanager"]')).toBeNull();
 });
 
 test("attribution allowlist keeps only campaign tokens and external hostname, never secrets or referrer paths", async () => {
@@ -52,7 +104,6 @@ test("share route telemetry uses a template and never loads Google or forwards t
   const a = await import("../../src/client/analytics");
   window.history.replaceState({}, "", "/s/a-private-slug?accessKey=secret#key=other-secret");
   a.configureAnalytics({ analyticsEnabled: true, ga4MeasurementId: "G-TEST12345" });
-  a.setAnalyticsConsent("granted");
   a.trackPage(window.location.pathname);
   const payload = JSON.parse(String(vi.mocked(fetch).mock.calls[0][1]?.body));
   expect(payload.route).toBe("/s/:slug");

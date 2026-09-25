@@ -101,9 +101,8 @@ test("consented WebMCP creation joins only sanitized tab context to the server u
   expect(JSON.stringify(context)).not.toMatch(/secret|private|document|title|fragment|conversation/);
   expect(result).toEqual({content:[{type:"text",text:'{"ok":true}'}],isError:false});
 });
-test.each(["absent","denied","dnt","gpc"])("%s WebMCP creation omits analytics form context",async(signal)=>{
+test.each(["denied","dnt","gpc"])("%s WebMCP creation omits analytics form context",async(signal)=>{
   const analytics=await enable();
-  if(signal==="absent") localStorage.clear();
   if(signal==="denied") analytics.setAnalyticsConsent("denied");
   if(signal==="dnt") Object.defineProperty(navigator,"doNotTrack",{value:"1"});
   if(signal==="gpc") Object.defineProperty(navigator,"globalPrivacyControl",{value:true});
@@ -112,4 +111,16 @@ test.each(["absent","denied","dnt","gpc"])("%s WebMCP creation omits analytics f
   await webMcpTools()[3].execute({html:"<html>hello</html>"});
   const upload=vi.mocked(fetch).mock.calls.find(([url])=>url==="/api/shares");
   expect((upload?.[1]?.body as FormData).has("analytics")).toBe(false);
+});
+
+test("default-on WebMCP creation attaches sanitized context without a saved preference", async () => {
+  const analytics = await import("../../src/client/analytics");
+  analytics.configureAnalytics({ analyticsEnabled: true });
+  vi.mocked(fetch).mockResolvedValue(new Response('{}', { status: 201 }));
+  const { webMcpTools } = await import("../../src/client/webmcp");
+  await webMcpTools()[3].execute({ html: "<html>hello</html>" });
+  const upload = vi.mocked(fetch).mock.calls.find(([url]) => url === "/api/shares");
+  const context = JSON.parse(String((upload?.[1]?.body as FormData).get("analytics")));
+  expect(context).toEqual({ session_id: expect.any(String), acquisition: {} });
+  expect(localStorage.getItem("sharehtml.analytics.consent")).toBeNull();
 });
