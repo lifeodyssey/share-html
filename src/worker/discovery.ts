@@ -199,12 +199,19 @@ export function mcpRegistryManifest() {
     name: "dev.zhenjia/share-html",
     title: "Share HTML",
     description: "Create sandboxed public-unlisted or access-key-protected HTML previews through a remote MCP server.",
-    version: "0.1.0",
+    version: "0.1.1",
     repository: {
       url: "https://github.com/lifeodyssey/share-html",
       source: "github",
     },
     websiteUrl: `${SITE_ORIGIN}/agents`,
+    icons: [
+      {
+        src: `${SITE_ORIGIN}/logo.svg`,
+        mimeType: "image/svg+xml",
+        sizes: ["any"],
+      },
+    ],
     remotes: [
       {
         type: "streamable-http",

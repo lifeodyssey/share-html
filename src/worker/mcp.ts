@@ -113,7 +113,7 @@ export async function handleMcpMessage(message: unknown, request: Request, env: 
         return mcpResult(message.id, {
           protocolVersion: negotiatedProtocolVersion(message.params),
           capabilities: { tools: {} },
-          serverInfo: { name: "Share HTML", version: "0.1.0" }
+          serverInfo: { name: "Share HTML", version: "0.1.1" }
         });
       case "tools/list":
         return mcpResult(message.id, { tools: mcpTools() });
@@ -160,11 +160,13 @@ export function mcpTools() {
     {
       name: "describe_share_html",
       description: "Return the AI-readable Share HTML guide, including routes and safety model.",
+      annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
       inputSchema: { type: "object", properties: {}, additionalProperties: false }
     },
     {
       name: "get_public_share",
       description: "Fetch public metadata for a Share HTML slug.",
+      annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true },
       inputSchema: {
         type: "object",
         properties: {
@@ -177,6 +179,7 @@ export function mcpTools() {
     ,{
       name: "create_share",
       description: "Publish one HTML page as either an unlisted or access-key protected sandboxed share.",
+      annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false },
       inputSchema: {
         type: "object",
         properties: {
